@@ -182,15 +182,16 @@ class OpenAIService:
 
         Args:
             text: 要轉換的文字
-            voice: 聲音選擇 (alloy, echo, fable, onyx, nova, shimmer)
+            voice: 聲音選擇 (alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse)
             speed: 語速 (0.25 到 4.0)
 
         Returns:
             bytes: MP3 音訊資料
         """
         try:
+            # 使用 gpt-4o-mini-tts 模型，對多語言（包括中文）有更好的支援
             response = self.client.audio.speech.create(
-                model="tts-1",
+                model="gpt-4o-mini-tts",
                 voice=voice,
                 input=text,
                 speed=speed,

@@ -78,10 +78,15 @@ async def get_available_voices():
         "success": True,
         "voices": [
             {"id": "alloy", "name": "Alloy", "description": "中性、平衡"},
+            {"id": "ash", "name": "Ash", "description": "中性、沉穩"},
+            {"id": "ballad", "name": "Ballad", "description": "抒情、溫柔"},
+            {"id": "coral", "name": "Coral", "description": "女性、清晰"},
             {"id": "echo", "name": "Echo", "description": "男性、沉穩"},
             {"id": "fable", "name": "Fable", "description": "英式、敘事感"},
             {"id": "onyx", "name": "Onyx", "description": "男性、深沉"},
-            {"id": "nova", "name": "Nova", "description": "女性、自然友善（推薦）"},
+            {"id": "nova", "name": "Nova", "description": "女性、自然友善（推薦中文）"},
+            {"id": "sage", "name": "Sage", "description": "中性、穩重"},
             {"id": "shimmer", "name": "Shimmer", "description": "女性、清晰表達"},
+            {"id": "verse", "name": "Verse", "description": "中性、自然"},
         ],
     }

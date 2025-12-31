@@ -1,0 +1,287 @@
+"""資料庫 CRUD 操作"""
+
+import hashlib
+import secrets
+import logging
+from datetime import datetime, timedelta
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.models import User, GoogleToken, APIToken, UserSheet
+
+logger = logging.getLogger(__name__)
+
+
+# =========================
+# User CRUD
+# =========================
+
+
+async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
+    """根據 ID 取得用戶"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+    """根據 Email 取得用戶"""
+    result = await db.execute(select(User).where(User.email == email))
+    return result.scalar_one_or_none()
+
+
+async def create_user(
+    db: AsyncSession,
+    user_id: str,
+    email: str,
+    name: str,
+    picture: Optional[str] = None,
+) -> User:
+    """建立新用戶"""
+    user = User(
+        id=user_id,
+        email=email,
+        name=name,
+        picture=picture,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    logger.info(f"Created user: {email}")
+    return user
+
+
+async def update_user(
+    db: AsyncSession,
+    user: User,
+    name: Optional[str] = None,
+    picture: Optional[str] = None,
+) -> User:
+    """更新用戶資料"""
+    if name is not None:
+        user.name = name
+    if picture is not None:
+        user.picture = picture
+    user.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def get_or_create_user(
+    db: AsyncSession,
+    user_id: str,
+    email: str,
+    name: str,
+    picture: Optional[str] = None,
+) -> tuple[User, bool]:
+    """取得或建立用戶，回傳 (user, is_new)"""
+    user = await get_user_by_id(db, user_id)
+    if user:
+        # 更新用戶資料
+        user = await update_user(db, user, name=name, picture=picture)
+        return user, False
+    else:
+        user = await create_user(db, user_id, email, name, picture)
+        return user, True
+
+
+# =========================
+# GoogleToken CRUD
+# =========================
+
+
+async def get_google_token(db: AsyncSession, user_id: str) -> Optional[GoogleToken]:
+    """取得用戶的 Google Token"""
+    result = await db.execute(
+        select(GoogleToken).where(GoogleToken.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def save_google_token(
+    db: AsyncSession,
+    user_id: str,
+    access_token: str,
+    refresh_token: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
+    scope: Optional[str] = None,
+) -> GoogleToken:
+    """儲存或更新 Google Token"""
+    token = await get_google_token(db, user_id)
+
+    if token:
+        # 更新現有 Token
+        token.access_token = access_token
+        if refresh_token:
+            token.refresh_token = refresh_token
+        token.expires_at = expires_at
+        token.scope = scope
+        token.updated_at = datetime.utcnow()
+    else:
+        # 建立新 Token
+        token = GoogleToken(
+            user_id=user_id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            scope=scope,
+        )
+        db.add(token)
+
+    await db.commit()
+    await db.refresh(token)
+    return token
+
+
+async def is_google_token_expired(token: GoogleToken) -> bool:
+    """檢查 Google Token 是否過期"""
+    if not token.expires_at:
+        return False
+    # 提前 5 分鐘視為過期
+    return datetime.utcnow() >= token.expires_at - timedelta(minutes=5)
+
+
+# =========================
+# APIToken CRUD
+# =========================
+
+
+def hash_token(token: str) -> str:
+    """將 Token 進行 SHA256 雜湊"""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def generate_api_token() -> str:
+    """產生隨機 API Token"""
+    return secrets.token_urlsafe(32)
+
+
+async def create_api_token(
+    db: AsyncSession,
+    description: str,
+    user_id: Optional[str] = None,
+    expires_days: Optional[int] = None,
+) -> tuple[str, APIToken]:
+    """建立 API Token，回傳 (原始 token, token 記錄)"""
+    raw_token = generate_api_token()
+    token_hash = hash_token(raw_token)
+
+    expires_at = None
+    if expires_days:
+        expires_at = datetime.utcnow() + timedelta(days=expires_days)
+
+    api_token = APIToken(
+        token_hash=token_hash,
+        user_id=user_id,
+        description=description,
+        expires_at=expires_at,
+    )
+    db.add(api_token)
+    await db.commit()
+    await db.refresh(api_token)
+
+    logger.info(f"Created API token: {description} for user: {user_id}")
+    return raw_token, api_token
+
+
+async def get_api_token_by_hash(db: AsyncSession, token_hash: str) -> Optional[APIToken]:
+    """根據 hash 取得 API Token"""
+    result = await db.execute(
+        select(APIToken).where(
+            APIToken.token_hash == token_hash,
+            APIToken.is_active == True,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def verify_api_token(db: AsyncSession, raw_token: str) -> Optional[APIToken]:
+    """驗證 API Token，回傳 Token 記錄或 None"""
+    token_hash = hash_token(raw_token)
+    token = await get_api_token_by_hash(db, token_hash)
+
+    if not token:
+        return None
+
+    # 檢查是否過期
+    if token.expires_at and datetime.utcnow() >= token.expires_at:
+        return None
+
+    # 更新最後使用時間
+    token.last_used_at = datetime.utcnow()
+    await db.commit()
+
+    return token
+
+
+async def get_user_api_tokens(db: AsyncSession, user_id: str) -> list[APIToken]:
+    """取得用戶的所有 API Token"""
+    result = await db.execute(
+        select(APIToken).where(
+            APIToken.user_id == user_id,
+            APIToken.is_active == True,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def revoke_api_token(db: AsyncSession, token_id: int, user_id: str) -> bool:
+    """撤銷 API Token"""
+    result = await db.execute(
+        select(APIToken).where(
+            APIToken.id == token_id,
+            APIToken.user_id == user_id,
+        )
+    )
+    token = result.scalar_one_or_none()
+
+    if not token:
+        return False
+
+    token.is_active = False
+    await db.commit()
+    logger.info(f"Revoked API token: {token_id}")
+    return True
+
+
+# =========================
+# UserSheet CRUD
+# =========================
+
+
+async def get_user_sheet(db: AsyncSession, user_id: str) -> Optional[UserSheet]:
+    """取得用戶的 Sheet 資訊"""
+    result = await db.execute(
+        select(UserSheet).where(UserSheet.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def save_user_sheet(
+    db: AsyncSession,
+    user_id: str,
+    sheet_id: str,
+    sheet_url: str,
+    sheet_name: str = "記帳紀錄",
+) -> UserSheet:
+    """儲存用戶的 Sheet 資訊"""
+    user_sheet = await get_user_sheet(db, user_id)
+
+    if user_sheet:
+        user_sheet.sheet_id = sheet_id
+        user_sheet.sheet_url = sheet_url
+        user_sheet.sheet_name = sheet_name
+    else:
+        user_sheet = UserSheet(
+            user_id=user_id,
+            sheet_id=sheet_id,
+            sheet_url=sheet_url,
+            sheet_name=sheet_name,
+        )
+        db.add(user_sheet)
+
+    await db.commit()
+    await db.refresh(user_sheet)
+    return user_sheet

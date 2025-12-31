@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.api import health, accounting, auth, speech
+from app.api import health, accounting, auth, speech, sheets
+from app.database import init_db, close_db
 from app.utils.exceptions import AppException
 from app.services.openai_service import OpenAIServiceError
 from app.services.google_sheets import GoogleSheetsError
@@ -112,6 +113,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(accounting.router, prefix="/api/accounting", tags=["Accounting"])
 app.include_router(speech.router, prefix="/api/speech", tags=["Speech"])
+app.include_router(sheets.router, prefix="/api/sheets", tags=["Sheets"])
 
 
 @app.get("/")
@@ -134,6 +136,17 @@ async def startup_event():
     """應用程式啟動時執行"""
     logger.info(f"Starting server in {settings.ENV} mode")
     logger.info(f"CORS origins: {settings.CORS_ORIGINS}")
+
+    # 初始化資料庫
+    await init_db()
+    logger.info("Database initialized")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """應用程式關閉時執行"""
+    await close_db()
+    logger.info("Database connection closed")
 
 
 if __name__ == "__main__":

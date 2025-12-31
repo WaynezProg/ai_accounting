@@ -21,3 +21,12 @@ pandas==2.2.3
 
 # HTTP client (for future use)
 httpx==0.28.1
+
+# Database (Phase 5)
+sqlalchemy[asyncio]==2.0.45
+aiosqlite==0.22.1
+
+# OAuth & JWT (Phase 5)
+google-auth-oauthlib==1.2.3
+python-jose[cryptography]==3.5.0
+cryptography==46.0.3

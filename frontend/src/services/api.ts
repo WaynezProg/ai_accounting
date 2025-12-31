@@ -9,19 +9,23 @@ const api = axios.create({
   },
 });
 
-// Token management
-let authToken: string | null = localStorage.getItem('api_token');
+// Token management - support both JWT (OAuth) and API Token
+let authToken: string | null = localStorage.getItem('auth_token') || localStorage.getItem('api_token');
 
 export const setAuthToken = (token: string | null) => {
   authToken = token;
   if (token) {
-    localStorage.setItem('api_token', token);
+    localStorage.setItem('auth_token', token);
   } else {
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('api_token');
   }
 };
 
 export const getAuthToken = () => authToken;
+
+// Check if user is authenticated
+export const isAuthenticated = () => !!authToken;
 
 // Request interceptor to add auth header
 api.interceptors.request.use((config) => {
@@ -30,6 +34,19 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Response interceptor for auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      setAuthToken(null);
+      // Optionally redirect to login
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Types
 export type AccountingRequest = {
@@ -63,6 +80,68 @@ export type TokenResponse = {
   description: string;
   created_at: string;
   expires_at: string | null;
+};
+
+// User types (Phase 5)
+export type UserInfo = {
+  id: string;
+  email: string;
+  name: string;
+  picture: string | null;
+};
+
+export type AuthStatus = {
+  success: boolean;
+  authenticated: boolean;
+  auth_type: 'jwt' | 'api_token' | null;
+  user_id: string | null;
+};
+
+export type MeResponse = {
+  success: boolean;
+  user: UserInfo;
+  auth_type: 'oauth' | 'api_token';
+};
+
+// Sheet types (Phase 5)
+export type SheetInfo = {
+  sheet_id: string;
+  sheet_url: string;
+  sheet_name: string;
+};
+
+export type DriveSheetItem = {
+  id: string;
+  name: string;
+  modified_time: string;
+  url: string;
+};
+
+export type SheetResponse = {
+  success: boolean;
+  sheet: SheetInfo | null;
+  message: string;
+};
+
+export type DriveSheetListResponse = {
+  success: boolean;
+  sheets: DriveSheetItem[];
+  message: string;
+};
+
+// API Token types (Phase 5)
+export type APITokenInfo = {
+  id: number;
+  description: string;
+  created_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  is_active: boolean;
+};
+
+export type APITokenListResponse = {
+  success: boolean;
+  tokens: APITokenInfo[];
 };
 
 // API functions
@@ -99,7 +178,7 @@ export const validateToken = async (token: string): Promise<{ valid: boolean; de
 };
 
 // TTS Types
-export type TTSVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+export type TTSVoice = 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'fable' | 'onyx' | 'nova' | 'sage' | 'shimmer' | 'verse';
 
 export type TTSRequest = {
   text: string;
@@ -229,7 +308,10 @@ export type TokenInfo = {
 
 export type GenerateTokenResponse = {
   success: boolean;
-  token: TokenInfo;
+  token: string;
+  description: string;
+  created_at: string;
+  expires_at: string | null;
   message: string;
 };
 
@@ -242,6 +324,92 @@ export const generateNewToken = async (description?: string): Promise<GenerateTo
 
 export const verifyToken = async (): Promise<{ success: boolean; message: string }> => {
   const response = await api.get<{ success: boolean; message: string }>('/api/auth/token/verify');
+  return response.data;
+};
+
+// ========================================
+// OAuth / Auth API (Phase 5)
+// ========================================
+
+// Get Google OAuth login URL
+export const getGoogleLoginUrl = (): string => {
+  return `${API_BASE_URL}/api/auth/google/login`;
+};
+
+// Get current user info
+export const getCurrentUser = async (): Promise<MeResponse> => {
+  const response = await api.get<MeResponse>('/api/auth/me');
+  return response.data;
+};
+
+// Get auth status
+export const getAuthStatus = async (): Promise<AuthStatus> => {
+  const response = await api.get<AuthStatus>('/api/auth/status');
+  return response.data;
+};
+
+// Logout
+export const logout = async (): Promise<{ success: boolean; message: string }> => {
+  const response = await api.post<{ success: boolean; message: string }>('/api/auth/logout');
+  // Clear local token
+  setAuthToken(null);
+  return response.data;
+};
+
+// ========================================
+// API Token Management (Phase 5)
+// ========================================
+
+// List user's API tokens
+export const listAPITokens = async (): Promise<APITokenListResponse> => {
+  const response = await api.get<APITokenListResponse>('/api/auth/token/list');
+  return response.data;
+};
+
+// Delete/revoke an API token
+export const revokeAPIToken = async (tokenId: number): Promise<{ success: boolean; message: string }> => {
+  const response = await api.delete<{ success: boolean; message: string }>(`/api/auth/token/${tokenId}`);
+  return response.data;
+};
+
+// ========================================
+// Sheet Management API (Phase 5)
+// ========================================
+
+// Get user's sheet info
+export const getMySheet = async (): Promise<SheetResponse> => {
+  const response = await api.get<SheetResponse>('/api/sheets/my-sheet');
+  return response.data;
+};
+
+// Create a new sheet
+export const createSheet = async (title?: string): Promise<SheetResponse> => {
+  const response = await api.post<SheetResponse>('/api/sheets/create', {
+    title: title || '語音記帳',
+  });
+  return response.data;
+};
+
+// Link an existing sheet
+export const linkSheet = async (sheetUrl: string): Promise<SheetResponse> => {
+  const response = await api.post<SheetResponse>(`/api/sheets/link?sheet_url=${encodeURIComponent(sheetUrl)}`);
+  return response.data;
+};
+
+// List all sheets from Google Drive
+export const listDriveSheets = async (): Promise<DriveSheetListResponse> => {
+  const response = await api.get<DriveSheetListResponse>('/api/sheets/list');
+  return response.data;
+};
+
+// Select a sheet from the list
+export const selectSheet = async (sheetId: string, sheetName?: string): Promise<SheetResponse> => {
+  console.log('selectSheet API called with:', { sheetId, sheetName });
+  const response = await api.post<SheetResponse>('/api/sheets/select', {
+    sheet_id: sheetId,
+    sheet_name: sheetName,
+  });
+  console.log('selectSheet API response:', response.data);
   return response.data;
 };
 

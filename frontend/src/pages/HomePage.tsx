@@ -137,8 +137,9 @@ export default function HomePage() {
         setLastFeedback(response.feedback);
         toast.success(response.message);
 
-        // Speak the result
-        await speakMessage(response.message);
+        // Speak the feedback (理財回饋) if available, otherwise speak the message
+        const textToSpeak = response.feedback || response.message;
+        await speakMessage(textToSpeak);
 
         // Clear input
         setInputText('');

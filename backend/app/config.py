@@ -30,5 +30,27 @@ class Settings:
         "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
     ).split(",")
 
+    # Google OAuth (Phase 5)
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI: str = os.getenv(
+        "GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback"
+    )
+    GOOGLE_OAUTH_SCOPES: list = [
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.readonly",  # 讀取所有 Drive 檔案列表
+    ]
+
+    # JWT (Phase 5)
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-this-secret-key-in-production")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24 hours
+
+    # Frontend URL (for OAuth redirect)
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 
 settings = Settings()
