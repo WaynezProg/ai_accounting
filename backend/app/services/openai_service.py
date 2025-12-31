@@ -174,6 +174,33 @@ class OpenAIService:
             logger.warning(f"Failed to generate feedback: {e}")
             return f"已記錄 {record.名稱} {record.花費}{record.幣別}"
 
+    async def text_to_speech(
+        self, text: str, voice: str = "nova", speed: float = 1.0
+    ) -> bytes:
+        """
+        文字轉語音 (TTS)
+
+        Args:
+            text: 要轉換的文字
+            voice: 聲音選擇 (alloy, echo, fable, onyx, nova, shimmer)
+            speed: 語速 (0.25 到 4.0)
+
+        Returns:
+            bytes: MP3 音訊資料
+        """
+        try:
+            response = self.client.audio.speech.create(
+                model="tts-1",
+                voice=voice,
+                input=text,
+                speed=speed,
+            )
+            return response.content
+
+        except Exception as e:
+            logger.error(f"TTS error: {e}")
+            raise OpenAIServiceError("TTS_ERROR", f"語音合成失敗：{str(e)}")
+
     async def answer_query(self, query: str, stats: MonthlyStats) -> str:
         """
         回答帳務查詢

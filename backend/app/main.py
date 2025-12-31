@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.api import health, accounting, auth
+from app.api import health, accounting, auth, speech
 from app.utils.exceptions import AppException
 from app.services.openai_service import OpenAIServiceError
 from app.services.google_sheets import GoogleSheetsError
@@ -111,6 +111,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(accounting.router, prefix="/api/accounting", tags=["Accounting"])
+app.include_router(speech.router, prefix="/api/speech", tags=["Speech"])
 
 
 @app.get("/")
