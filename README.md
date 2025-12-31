@@ -112,6 +112,15 @@ uvicorn app.main:app --reload
 | POST | `/api/accounting/query` | ✅ | 自然語言查詢 |
 | GET | `/api/accounting/categories` | ❌ | 類別清單 |
 
+> **認證說明：**
+> - ✅ 需要在 Header 提供 `Authorization: Bearer <token>`
+> - ❌ 不需要認證，原因如下：
+>   - `/health`：供監控系統使用，需公開存取
+>   - `/api/auth/token/generate`：產生 Token 的入口，否則無法取得第一個 Token
+>   - `/api/accounting/categories`：類別清單為公開資訊，不涉及用戶資料
+>
+> **注意**：Phase 5 實作 Google OAuth 後，`/api/auth/token/generate` 將改為需要登入才能使用。
+
 ### 使用範例
 
 **產生 Token：**
