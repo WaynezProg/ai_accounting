@@ -1,0 +1,23 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# OpenAI
+openai==1.58.1
+
+# Google Sheets
+pygsheets==2.0.6
+google-api-python-client==2.157.0
+google-auth==2.37.0
+
+# Environment
+python-dotenv==1.0.1
+
+# Data validation
+pydantic==2.10.4
+
+# Data processing (required by pygsheets)
+pandas==2.2.3
+
+# HTTP client (for future use)
+httpx==0.28.1
