@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 
 from app.models.schemas import (
     AccountingRequest,
@@ -15,17 +15,23 @@ from app.models.schemas import (
 from app.services.openai_service import openai_service
 from app.services.google_sheets import google_sheets_service
 from app.utils.categories import DEFAULT_CATEGORIES
+from app.utils.auth import verify_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/record", response_model=AccountingResponse)
-async def record_accounting(request: AccountingRequest):
+async def record_accounting(
+    request: AccountingRequest,
+    token_valid: bool = Depends(verify_token),
+):
     """
     記帳端點
 
     接收語音轉文字內容，使用 LLM 解析後寫入 Google Sheets
+
+    需要在 Authorization header 提供 Bearer Token
     """
     logger.info(f"Recording: {request.text}")
 
@@ -53,11 +59,16 @@ async def record_accounting(request: AccountingRequest):
 
 
 @router.get("/stats", response_model=StatsResponse)
-async def get_stats(month: Optional[str] = Query(None, description="月份，格式：YYYY-MM")):
+async def get_stats(
+    month: Optional[str] = Query(None, description="月份，格式：YYYY-MM"),
+    token_valid: bool = Depends(verify_token),
+):
     """
     取得月度統計資料
 
     如果未指定月份，則回傳當月統計
+
+    需要在 Authorization header 提供 Bearer Token
     """
     logger.info(f"Getting stats for month: {month or 'current'}")
 
@@ -70,11 +81,16 @@ async def get_stats(month: Optional[str] = Query(None, description="月份，格
 
 
 @router.post("/query", response_model=QueryResponse)
-async def query_accounting(request: QueryRequest):
+async def query_accounting(
+    request: QueryRequest,
+    token_valid: bool = Depends(verify_token),
+):
     """
     帳務查詢端點
 
     使用自然語言查詢帳務狀況
+
+    需要在 Authorization header 提供 Bearer Token
     """
     logger.info(f"Query: {request.query}")
 
@@ -92,7 +108,11 @@ async def query_accounting(request: QueryRequest):
 
 @router.get("/categories")
 async def get_categories():
-    """取得預設類別清單"""
+    """
+    取得預設類別清單
+
+    此端點不需要認證
+    """
     return {
         "success": True,
         "categories": DEFAULT_CATEGORIES,
