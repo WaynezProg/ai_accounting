@@ -1,4 +1,4 @@
-# Phase 2：Siri 捷徑整合
+# Phase 2：Siri 捷徑整合 ✅ 已完成
 
 ## 目標
 
@@ -6,53 +6,61 @@
 
 ---
 
-## 前置條件
+## 前置條件 ✅
 
-- [ ] Phase 1 完成
-- [ ] 記帳 API 功能正常
+- [x] Phase 1 完成
+- [x] 記帳 API 功能正常
 
 ---
 
-## 任務清單
+## 完成項目
 
-### 2.1 Token 認證機制
+### 2.1 Token 認證機制 ✅
 
-- [ ] 建立 Token 資料模型
+- [x] 建立 Token 資料模型 (`backend/app/models/token.py`)
   ```python
   class APIToken(BaseModel):
       token: str
+      description: str = ""
       created_at: datetime
-      expires_at: Optional[datetime]
-      description: str  # 如 "Siri 捷徑"
+      expires_at: Optional[datetime] = None
+      is_active: bool = True
+
+      def is_valid(self) -> bool:
+          # 檢查 Token 是否有效
   ```
 
-- [ ] Token 儲存方式（Phase 5 前的簡化版）
-  - 選項 A：環境變數固定 Token
-  - 選項 B：SQLite 簡易儲存
+- [x] Token 儲存方式（Phase 5 前的簡化版）
+  - 使用 JSON 檔案儲存 (`backend/data/tokens.json`)
+  - `TokenStore` 類別管理 CRUD 操作
 
-- [ ] 實作 Bearer Token 驗證
+- [x] 實作 Bearer Token 驗證 (`backend/app/utils/auth.py`)
   ```python
-  # 依賴注入
   async def verify_token(
-      authorization: str = Header(...)
+      credentials: HTTPAuthorizationCredentials = Depends(security)
   ) -> bool:
       # 驗證 Bearer Token
   ```
 
-### 2.2 認證相關 API
+### 2.2 認證相關 API ✅
 
-- [ ] `POST /api/auth/token/generate`
+- [x] `POST /api/auth/token/generate`
   - 產生新的 API Token
+  - 支援設定過期時間
   - 暫時可直接呼叫（Phase 5 後改為需 OAuth 登入）
 
-- [ ] `GET /api/auth/token/verify`
+- [x] `GET /api/auth/token/verify`
   - 驗證 Token 是否有效
 
-### 2.3 保護記帳 API
+- [x] `GET /api/auth/status`
+  - 檢查認證狀態
 
-- [ ] 修改 `POST /api/accounting/record`
-  - 加入 Token 驗證
-  - 無 Token 或無效 Token 回傳 401
+### 2.3 保護記帳 API ✅
+
+- [x] 修改 `POST /api/accounting/record` - 加入 Token 驗證
+- [x] 修改 `GET /api/accounting/stats` - 加入 Token 驗證
+- [x] 修改 `POST /api/accounting/query` - 加入 Token 驗證
+- [x] 無 Token 或無效 Token 回傳 401
 
 ```python
 @router.post("/record")
@@ -63,14 +71,15 @@ async def record_accounting(
     ...
 ```
 
-### 2.4 Siri 捷徑設定文件
+### 2.4 Siri 捷徑設定文件 ✅
 
-- [ ] 建立 `docs/siri-shortcut-setup.md`
-  - 捷徑建立步驟（含截圖說明）
+- [x] 建立 `docs/siri-shortcut-setup.md`
+  - 捷徑建立步驟
   - API Token 取得方式
   - 捷徑設定參數
+  - 錯誤排除說明
 
-- [ ] 捷徑流程設計
+- [x] 捷徑流程設計
   ```
   1. 觸發捷徑（語音或點擊）
   2. 聽寫輸入（Siri 內建 STT）
@@ -84,26 +93,32 @@ async def record_accounting(
   4. 顯示/朗讀結果
   ```
 
-### 2.5 本地測試
+### 2.5 本地測試 ✅
 
-- [ ] 使用 ngrok 或類似工具暴露本地服務
-- [ ] 在 iPhone 上測試 Siri 捷徑
-- [ ] 驗證完整流程
-
----
-
-## 完成條件
-
-- [ ] API Token 機制運作正常
-- [ ] 無 Token 無法呼叫記帳 API
-- [ ] Siri 捷徑可成功記帳
-- [ ] 設定文件完整
+- [x] 後端 API 測試通過
+- [x] Token 產生/驗證功能正常
+- [ ] ngrok 暴露本地服務（用戶需自行設定）
+- [ ] iPhone Siri 捷徑測試（用戶需自行測試）
 
 ---
 
-## 測試案例
+## 完成條件 ✅
+
+- [x] API Token 機制運作正常
+- [x] 無 Token 無法呼叫記帳 API（回傳 401）
+- [x] 設定文件完整
+- [ ] Siri 捷徑實際測試（需用戶自行驗證）
+
+---
+
+## 測試案例 ✅
 
 ```bash
+# 產生 Token
+curl -X POST http://localhost:8000/api/auth/token/generate \
+  -H "Content-Type: application/json" \
+  -d '{"description": "Siri 捷徑"}'
+
 # 無 Token（應回傳 401）
 curl -X POST http://localhost:8000/api/accounting/record \
   -H "Content-Type: application/json" \
@@ -114,10 +129,14 @@ curl -X POST http://localhost:8000/api/accounting/record \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token-here" \
   -d '{"text": "午餐100元"}'
+
+# 驗證 Token
+curl http://localhost:8000/api/auth/token/verify \
+  -H "Authorization: Bearer your-token-here"
 ```
 
 ---
 
 ## 下一階段
 
-完成後進入 [Phase 3：前端開發](./phase-3-frontend.md)
+→ [Phase 3：前端基礎建設](./phase-3-frontend.md) 🔲 待開發

@@ -1,4 +1,4 @@
-# Phase 3：前端開發
+# Phase 3：前端基礎建設 🔲 待開發
 
 ## 目標
 
@@ -8,8 +8,8 @@
 
 ## 前置條件
 
-- [ ] Phase 2 完成
-- [ ] 後端 API 穩定運作
+- [x] Phase 2 完成
+- [x] 後端 API 穩定運作
 
 ---
 
@@ -51,10 +51,10 @@
   │   │   └── useSpeechSynthesis.ts
   │   ├── lib/
   │   │   └── utils.ts         # cn() helper
-  │   ├── App.tsx
-  │   └── main.tsx
   │   ├── types/
   │   │   └── index.ts         # TypeScript 型別
+  │   ├── App.tsx
+  │   └── main.tsx
   ├── components.json
   ├── package.json
   ├── tailwind.config.js
@@ -69,12 +69,19 @@
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   export const accountingApi = {
-    record: async (text: string) => { ... },
+    record: async (text: string, token: string) => { ... },
+    getStats: async (token: string, month?: string) => { ... },
+    query: async (query: string, token: string) => { ... },
     getCategories: async () => { ... },
+  };
+
+  export const authApi = {
+    generateToken: async (description: string) => { ... },
+    verifyToken: async (token: string) => { ... },
   };
   ```
 
-- [ ] 設定 CORS（後端需配合）
+- [ ] 設定 axios interceptors（錯誤處理）
 
 ### 3.3 語音輸入 (STT)
 
@@ -82,13 +89,13 @@
   ```typescript
   const useSpeechRecognition = () => {
     // Web Speech API
-    // 回傳：transcript, isListening, startListening, stopListening
+    // 回傳：transcript, isListening, startListening, stopListening, error
   };
   ```
 
 - [ ] 建立 `VoiceRecorder` 元件
   - 麥克風按鈕
-  - 錄音狀態指示
+  - 錄音狀態指示（動畫）
   - 即時顯示識別文字
   - 瀏覽器相容性檢查
 
@@ -110,18 +117,20 @@
 
 - [ ] 安裝需要的 shadcn/ui 元件
   ```bash
-  npx shadcn@latest add button card input
+  npx shadcn@latest add button card input toast
   ```
 
 - [ ] 建立主頁面 `App.tsx`
+  - Token 輸入區（首次使用）
   - 語音輸入區
   - 文字輸入區（備用）
   - 送出按鈕
   - 結果顯示區
 
 - [ ] 建立 `AccountingResult` 元件
-  - 顯示解析結果（日期、金額、類別等）
+  - 顯示解析結果（時間、金額、類別等）
   - 成功/失敗狀態
+  - 理財回饋顯示
   - 語音播放回饋
 
 ### 3.6 UI/UX 設計
@@ -152,12 +161,13 @@
 
 ## 測試案例
 
-1. 開啟網頁，點擊麥克風
-2. 說「午餐吃滷肉飯 80 元」
-3. 確認文字識別正確
-4. 點擊送出
-5. 確認顯示記帳結果
-6. 確認語音播放結果
+1. 開啟網頁，輸入 API Token
+2. 點擊麥克風
+3. 說「午餐吃滷肉飯 80 元」
+4. 確認文字識別正確
+5. 點擊送出
+6. 確認顯示記帳結果
+7. 確認語音播放結果
 
 ---
 
@@ -174,4 +184,4 @@
 
 ## 下一階段
 
-完成後進入 [Phase 4：功能補強](./phase-4-enhancements.md)
+→ [Phase 4：前端功能整合](./phase-4-enhancements.md) 🔲 待開發
