@@ -1,4 +1,4 @@
-# Phase 5：Google OAuth 2.0 🔲 待開發
+# Phase 5：Google OAuth 2.0 ✅ 完成
 
 ## 目標
 
@@ -6,213 +6,205 @@
 
 ---
 
-## 前置條件
+## 前置條件 ✅
 
-- [ ] Phase 4 完成
-- [ ] GCP 專案已設定 OAuth 2.0 憑證
-- [ ] 授權重新導向 URI 已設定
+- [x] Phase 4 完成
+- [x] GCP 專案已設定 OAuth 2.0 憑證
+- [x] 授權重新導向 URI 已設定
 
 ---
 
-## 任務清單
+## 完成項目
 
-### 5.1 GCP OAuth 設定
+### 5.1 GCP OAuth 設定 ✅
 
-- [ ] 建立 OAuth 2.0 憑證（Web Application 類型）
-- [ ] 設定授權重新導向 URI
+- [x] 建立 OAuth 2.0 憑證（Web Application 類型）
+- [x] 設定授權重新導向 URI
   - 開發：`http://localhost:8000/api/auth/google/callback`
   - 生產：`https://your-domain/api/auth/google/callback`
-- [ ] 下載憑證 JSON
-- [ ] 設定 OAuth 同意畫面
-  - 應用程式名稱
-  - 支援電子郵件
-  - 授權範圍（Sheets、Drive）
+- [x] 設定 OAuth 同意畫面
+- [x] OAuth 授權範圍：
+  - `openid` - OpenID Connect
+  - `userinfo.email` - 用戶電子郵件
+  - `userinfo.profile` - 用戶資訊
+  - `spreadsheets` - Google Sheets 讀寫
+  - `drive.readonly` - 列出 Google Drive 中的 Sheets
 
-### 5.2 資料庫設定
+### 5.2 資料庫設定 ✅
 
-- [ ] 安裝依賴
-  ```bash
-  pip install aiosqlite sqlalchemy[asyncio]
-  ```
-
-- [ ] 建立 SQLite 資料庫結構
+- [x] 安裝依賴 (`aiosqlite`, `sqlalchemy[asyncio]`)
+- [x] SQLite 資料庫結構（`backend/app/database/`）
   ```python
-  # models/database.py
+  # models.py
   class User(Base):
       id: str  # Google User ID
       email: str
       name: str
+      picture: Optional[str]
       created_at: datetime
 
   class GoogleToken(Base):
       user_id: str (FK)
-      access_token: str (encrypted)
-      refresh_token: str (encrypted)
+      access_token: str
+      refresh_token: str
       expires_at: datetime
 
   class APIToken(Base):
+      id: int
       token_hash: str
       user_id: str (FK)
       description: str
       created_at: datetime
       expires_at: Optional[datetime]
+      last_used_at: Optional[datetime]
       is_active: bool
 
   class UserSheet(Base):
       user_id: str (FK)
       sheet_id: str
       sheet_url: str
+      sheet_name: str
   ```
 
-- [ ] 實作資料庫服務
-  - `create_user()`
-  - `get_user()`
-  - `save_google_token()`
-  - `get_google_token()`
-  - `refresh_token_if_needed()`
+- [x] CRUD 操作函數（`backend/app/database/crud.py`）
 
-### 5.3 OAuth 認證流程
+### 5.3 OAuth 認證流程 ✅
 
-- [ ] `GET /api/auth/google/login`
+- [x] `GET /api/auth/google/login`
   - 產生 OAuth URL（含 state 參數）
   - 重導向至 Google 登入
 
-- [ ] `GET /api/auth/google/callback`
+- [x] `GET /api/auth/google/callback`
   - 驗證 state 參數
   - 交換 Authorization Code 為 Token
   - 取得用戶資訊
   - 建立/更新用戶資料
   - 儲存 Google Token
-  - 重導向至前端（帶 Session Token）
+  - 重導向至前端（帶 JWT Token）
 
-- [ ] `POST /api/auth/logout`
-  - 清除 Session
-  - 可選：撤銷 Google Token
+- [x] `POST /api/auth/logout`
+  - 清除本地 Token
 
-- [ ] `GET /api/auth/me`
+- [x] `GET /api/auth/me`
   - 回傳當前登入用戶資訊
 
-### 5.4 Session / JWT 管理
+- [x] `GET /api/auth/status`
+  - 檢查認證狀態
 
-- [ ] 選擇認證方式
-  - 選項 A：Cookie-based Session（適合 SSR）
-  - 選項 B：JWT Token（適合 SPA）
+### 5.4 JWT Session 管理 ✅
 
-- [ ] 實作認證中介層
+- [x] 使用 JWT Token（適合 SPA）
+- [x] 實作認證中介層
   ```python
   async def get_current_user(
-      token: str = Depends(oauth2_scheme)
-  ) -> User:
-      # 驗證 JWT 並回傳用戶
+      credentials: HTTPAuthorizationCredentials = Depends(security)
+  ) -> dict:
+      # 支援 JWT (OAuth) 或 API Token
   ```
 
-- [ ] 支援兩種認證方式
+- [x] 支援兩種認證方式
   - OAuth Session（網頁登入用戶）
   - API Token（Siri 捷徑）
 
-### 5.5 用戶專屬 Sheet
+### 5.5 用戶專屬 Sheet ✅
 
-- [ ] 首次登入時自動建立 Sheet
-  ```python
-  async def create_user_sheet(user: User, credentials):
-      # 使用用戶的 OAuth Token 建立 Sheet
-      # 設定 Sheet 結構（標題列）
-      # 儲存 Sheet ID 至資料庫
-  ```
-
-- [ ] 修改 GoogleSheetsService
-  - 接受用戶 OAuth Token（而非 Service Account）
-  - 操作用戶自己的 Sheet
+- [x] `UserSheetsService` 類別（`backend/app/services/user_sheets_service.py`）
+  - 使用用戶的 OAuth Token 操作 Sheet
   - 處理 Token 刷新
 
-### 5.6 前端 OAuth 整合
+- [x] Sheet 管理 API（`backend/app/api/sheets.py`）
+  - `GET /api/sheets/list` - 列出 Google Drive 中的所有 Sheets
+  - `POST /api/sheets/select` - 選擇現有 Sheet
+  - `POST /api/sheets/create` - 建立新 Sheet
+  - `GET /api/sheets/my-sheet` - 取得用戶的 Sheet 資訊
 
-- [ ] 登入按鈕
-  - 點擊後導向 `/api/auth/google/login`
+- [x] 月份分頁管理
+  - 自動建立月份分頁（YYYY-MM 格式）
+  - 每個月份獨立分頁，方便統計
 
-- [ ] 處理 OAuth 回調
-  - 從 URL 取得 Token
-  - 儲存至 localStorage / Cookie
-  - 導向主頁面
+### 5.6 前端 OAuth 整合 ✅
 
-- [ ] 認證狀態管理
-  - Context 或 Zustand
-  - 自動刷新 Token
-  - 登入狀態持久化
+- [x] 登入按鈕（導向 `/api/auth/google/login`）
+- [x] 處理 OAuth 回調（從 URL 取得 Token）
+- [x] Token 儲存至 localStorage
+- [x] 認證狀態管理
+- [x] 登出功能
+- [x] 條件渲染（未登入/已登入狀態）
+- [x] Sheet 選擇介面
+  - 列出 Google Drive 中的所有 Sheets
+  - 選擇現有 Sheet 或建立新 Sheet
 
-- [ ] 登出功能
-  - 清除本地 Token
-  - 呼叫後端登出 API
+### 5.7 API Token 與 OAuth 整合 ✅
 
-- [ ] 條件渲染
-  - 未登入：顯示登入按鈕
-  - 已登入：顯示用戶資訊 + 登出按鈕
+- [x] Token 產生需登入後才可操作
+- [x] Token 綁定用戶 ID
+- [x] Token 管理 API
+  - `GET /api/auth/token/list` - 列出用戶的 Tokens
+  - `DELETE /api/auth/token/{id}` - 撤銷 Token
 
-### 5.7 API Token 與 OAuth 整合
-
-- [ ] 修改 Token 產生邏輯
-  - 需登入後才能產生
-  - Token 綁定用戶 ID
-
-- [ ] 修改 Token 驗證邏輯
-  - Token 查詢時取得對應用戶
-  - 記帳 API 使用用戶的 Sheet
-
-- [ ] 記帳 API 支援兩種認證
+- [x] 記帳 API 支援兩種認證
   - OAuth Session（網頁）→ 用戶的 Sheet
   - API Token（Siri）→ Token 綁定用戶的 Sheet
 
-### 5.8 資料遷移
+---
 
-- [ ] 遷移現有 Token（JSON → SQLite）
-- [ ] 遷移腳本
+## 完成條件 ✅
+
+- [x] 可使用 Google 帳號登入
+- [x] 每個用戶有自己的 Sheet
+- [x] 可從 Google Drive 選擇現有 Sheet
+- [x] Google Token 正確儲存與刷新
+- [x] Siri 捷徑可使用（透過 API Token）
+- [x] 前端登入/登出功能正常
+- [x] 月份分頁自動建立
 
 ---
 
-## 完成條件
-
-- [ ] 可使用 Google 帳號登入
-- [ ] 每個用戶有自己的 Sheet
-- [ ] Google Token 正確儲存與刷新
-- [ ] Siri 捷徑仍可使用（透過 API Token）
-- [ ] 前端登入/登出功能正常
-
----
-
-## 安全性注意事項
-
-- [ ] Token 加密儲存
-- [ ] HTTPS 強制（生產環境）
-- [ ] CSRF 防護
-- [ ] state 參數驗證（防止 CSRF）
-- [ ] 敏感資訊不外洩（Token 不顯示在 URL）
-
----
-
-## 環境變數更新
+## 環境變數
 
 ```bash
-# 新增
+# Google OAuth 2.0
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+
+# JWT
 JWT_SECRET_KEY=random-secret-for-jwt
 JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=60
+
+# 資料庫
+DATABASE_URL=sqlite+aiosqlite:///./data/app.db
 ```
 
 ---
 
-## 測試案例
+## 已建立檔案
 
-1. 點擊 Google 登入
-2. 完成 OAuth 授權
-3. 確認自動建立 Sheet
-4. 記帳並確認寫入用戶的 Sheet
-5. 產生 API Token
-6. 用 API Token 呼叫記帳 API
-7. 確認寫入同一用戶的 Sheet
-8. 登出並確認狀態清除
+```
+backend/
+├── app/
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── database.py     # 資料庫連線
+│   │   ├── models.py       # SQLAlchemy 模型
+│   │   └── crud.py         # CRUD 操作
+│   ├── services/
+│   │   ├── oauth_service.py       # OAuth 服務
+│   │   └── user_sheets_service.py # 用戶 Sheet 服務
+│   ├── api/
+│   │   ├── auth.py         # OAuth API 端點
+│   │   └── sheets.py       # Sheet 管理 API
+│   └── utils/
+│       └── auth.py         # 認證工具（JWT + API Token）
+
+frontend/
+├── src/
+│   ├── pages/
+│   │   └── SettingsPage.tsx  # 設定頁面（含 Sheet 選擇）
+│   └── services/
+│       └── api.ts            # API 呼叫（含 OAuth、Sheet API）
+```
 
 ---
 

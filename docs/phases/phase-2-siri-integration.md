@@ -139,4 +139,4 @@ curl http://localhost:8000/api/auth/token/verify \
 
 ## 下一階段
 
-→ [Phase 3：前端基礎建設](./phase-3-frontend.md) 🔲 待開發
+→ [Phase 3：前端基礎建設](./phase-3-frontend.md) ✅ 已完成

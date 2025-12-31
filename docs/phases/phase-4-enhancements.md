@@ -20,7 +20,8 @@
 - [x] 後端：新增 OpenAI TTS API 端點
   - `POST /api/speech/synthesize` - 文字轉語音
   - `GET /api/speech/voices` - 取得可用聲音列表
-  - 支援 6 種聲音：alloy, echo, fable, onyx, nova, shimmer
+  - 使用 `gpt-4o-mini-tts` 模型（最新、最自然的中文支援）
+  - 支援 11 種聲音：alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse
   - 支援語速調整 (0.25-4.0)
 
 - [x] 前端：OpenAI TTS Hook (`useOpenAITTS`)
@@ -95,9 +96,10 @@
   - Siri 捷徑設定說明
 - [x] 語音設定
   - 自然語音開關
-  - 6 種語音選擇（含說明）
+  - 11 種語音選擇（含說明）
   - 語速調整滑桿
 - [x] 重設設定功能
+- [x] TTS 自動播放理財回饋（`feedback` 內容）
 
 ---
 
@@ -212,4 +214,4 @@ frontend/src/components/ui/label.tsx
 
 ## 下一階段
 
-→ [Phase 5：Google OAuth](./phase-5-oauth.md) 🔲 待開發
+→ [Phase 5：Google OAuth](./phase-5-oauth.md) ✅ 已完成

@@ -15,11 +15,24 @@
 
 ## 步驟一：取得 API Token
 
-### 方法 A：使用 curl 命令（開發測試）
+### 方法 A：使用網頁介面（推薦）
+
+1. 開啟網頁應用程式
+2. 使用 Google 帳號登入
+3. 前往「設定」頁面
+4. 點擊「產生 API Token」
+5. 複製產生的 Token
+
+**重要**：Token 只會顯示一次，請妥善保管！
+
+### 方法 B：使用 curl 命令（開發測試）
+
+需要先透過網頁登入取得 JWT Token，然後呼叫 API：
 
 ```bash
 curl -X POST "http://你的API網址/api/auth/token/generate" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{"description": "Siri 捷徑"}'
 ```
 
@@ -32,15 +45,6 @@ curl -X POST "http://你的API網址/api/auth/token/generate" \
   "message": "Token 已產生，請妥善保管"
 }
 ```
-
-### 方法 B：使用網頁介面（Phase 3 後可用）
-
-1. 開啟網頁應用程式
-2. 登入後前往「設定」
-3. 點擊「產生 API Token」
-4. 複製產生的 Token
-
-**重要**：Token 只會顯示一次，請妥善保管！
 
 ---
 
@@ -86,17 +90,18 @@ http://你的API網址/api/accounting/record
 }
 ```
 
-### 2.4 加入「取得詞典值」動作
+### 2.4 加入「取得詞典值」動作（取得回饋）
 
 1. 搜尋「詞典」
 2. 選擇「從輸入取得值」
-3. 設定 Key 為 `message`
+3. 設定 Key 為 `feedback`
+4. 如果沒有 feedback，可加入另一個取 `message` 作為備用
 
 ### 2.5 加入「朗讀文字」動作
 
 1. 搜尋「朗讀」
 2. 選擇「朗讀文字」
-3. 輸入：上一步的值
+3. 輸入：上一步的值（feedback 或 message）
 
 ### 2.6 設定捷徑名稱
 
@@ -122,7 +127,7 @@ http://你的API網址/api/accounting/record
 1. 說「嘿 Siri，記一筆帳」
 2. 等待提示後說出記帳內容
 3. 例如：「午餐吃滷肉飯 80 元」
-4. Siri 會朗讀記帳結果
+4. Siri 會朗讀理財回饋
 
 ### 方式二：點擊捷徑
 
@@ -162,7 +167,7 @@ http://你的API網址/api/accounting/record
                     ↓
 ┌─────────────────────────────────────────┐
 │  從輸入取得值                           │
-│  Key: message                           │
+│  Key: feedback                          │
 └─────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────┐
@@ -175,14 +180,16 @@ http://你的API網址/api/accounting/record
 
 ## 進階設定
 
-### 加入理財回饋
+### 同時朗讀確認訊息和理財回饋
 
-如果想要朗讀理財回饋，可以：
+如果想要同時朗讀確認訊息和理財回饋：
 
-1. 在「取得 URL 內容」後，加入另一個「從輸入取得值」
-2. Key 設為 `feedback`
-3. 用「結合文字」合併 `message` 和 `feedback`
-4. 朗讀合併後的文字
+1. 在「取得 URL 內容」後，加入「從輸入取得值」
+2. Key 設為 `message`（取得確認訊息）
+3. 再加入另一個「從輸入取得值」
+4. Key 設為 `feedback`（取得理財回饋）
+5. 用「結合文字」合併兩者
+6. 朗讀合併後的文字
 
 ### 錯誤處理
 
@@ -203,7 +210,7 @@ http://你的API網址/api/accounting/record
 ### Q: Token 無效怎麼辦？
 
 - Token 可能已過期或被撤銷
-- 重新產生新的 Token
+- 前往網頁設定頁面重新產生新的 Token
 - 更新捷徑中的 Authorization header
 
 ### Q: 語音識別不準確？
@@ -223,6 +230,46 @@ curl -X POST "http://你的API網址/api/accounting/record" \
   -d '{"text": "午餐吃滷肉飯80元"}'
 ```
 
+### Q: 記帳會寫入哪個 Sheet？
+
+- API Token 綁定用戶帳號
+- 使用 Token 記帳會寫入該用戶設定的 Google Sheet
+- 可在網頁設定頁面查看或更換 Sheet
+
+---
+
+## API 回應格式
+
+### 成功回應
+
+```json
+{
+  "success": true,
+  "message": "記帳成功",
+  "record": {
+    "時間": "2024-01-15 12:30",
+    "名稱": "滷肉飯",
+    "類別": "飲食",
+    "花費": 80,
+    "幣別": "TWD",
+    "支付方式": null
+  },
+  "feedback": "已記錄午餐 80元。本月飲食類別已消費 3,500元，佔總支出 35%。建議適度控制飲食支出。"
+}
+```
+
+### 失敗回應
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PARSE_ERROR",
+    "message": "無法解析記帳內容"
+  }
+}
+```
+
 ---
 
 ## 安全注意事項
@@ -230,9 +277,11 @@ curl -X POST "http://你的API網址/api/accounting/record" \
 1. **不要分享 Token**：Token 相當於密碼
 2. **定期更換 Token**：建議每 3-6 個月更換
 3. **使用 HTTPS**：生產環境務必使用 HTTPS
+4. **管理 Token**：可在網頁設定頁面查看和撤銷 Token
 
 ---
 
 ## 更新紀錄
 
 - 2024-01-15：初版
+- 2025-01：更新 Token 取得方式（需先登入 OAuth）、新增 feedback 欄位說明

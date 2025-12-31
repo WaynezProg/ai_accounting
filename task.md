@@ -34,7 +34,8 @@
   - Siri 捷徑：API Token（Bearer Token）
 - **語音處理**:
   - 手機端: Siri 捷徑內建語音識別
-  - 網頁端: Web Speech API (STT/TTS)
+  - 網頁端 STT: Web Speech API
+  - 網頁端 TTS: OpenAI TTS API (`gpt-4o-mini-tts` 模型，支援 11 種聲音)
 
 ## 系統架構
 
@@ -185,6 +186,15 @@ VITE_API_BASE_URL=http://localhost:8000
 | GET | `/api/accounting/stats` | 統計資料 | OAuth/Token |
 | POST | `/api/accounting/query` | 帳務查詢 | OAuth/Token |
 | GET | `/api/accounting/categories` | 類別清單 | OAuth/Token |
+| POST | `/api/speech/synthesize` | 文字轉語音 (TTS) | OAuth/Token |
+| GET | `/api/speech/voices` | 取得可用聲音列表 | - |
+| GET | `/api/sheets/list` | 列出 Google Drive 中的 Sheets | OAuth |
+| POST | `/api/sheets/select` | 選擇現有 Sheet | OAuth |
+| POST | `/api/sheets/create` | 建立新 Sheet | OAuth |
+| GET | `/api/sheets/my-sheet` | 取得用戶的 Sheet 資訊 | OAuth |
+| GET | `/api/auth/me` | 取得當前用戶資訊 | OAuth |
+| GET | `/api/auth/token/list` | 列出用戶的 API Tokens | OAuth |
+| DELETE | `/api/auth/token/{id}` | 撤銷 API Token | OAuth |
 | GET | `/health` | 健康檢查 | - |
 
 ---
@@ -549,40 +559,58 @@ GET /api/accounting/stats?month=2024-01
 
 ---
 
-## 開發優先順序（已調整）
+## 開發進度總覽
 
-基於「最快可用」原則，參考現有 `note_money/` 功能重建，順序調整如下：
+| 階段 | 名稱 | 狀態 |
+|------|------|:----:|
+| Phase 0 | 重構專案結構 | ✅ 完成 |
+| Phase 1 | 後端核心功能 | ✅ 完成 |
+| Phase 2 | Siri 捷徑整合 | ✅ 完成 |
+| Phase 3 | 前端基礎建設 | ✅ 完成 |
+| Phase 4 | 前端功能整合 | ✅ 完成 |
+| Phase 5 | Google OAuth 2.0 | ✅ 完成 |
+| Phase 6 | 部署與文件 | 🔲 待開發 |
 
-### Phase 0：重構專案結構
+---
+
+### Phase 0：重構專案結構 ✅
 - 參考 `note_money/` 現有功能，建立新的 backend/ 結構
-- 現有功能：FastAPI + OpenAI LLM 解析 + Google Sheets 寫入（Service Account）
-- `note_money/` 在功能重現後刪除
+- FastAPI + OpenAI LLM 解析 + Google Sheets 寫入
+- `note_money/` 已刪除
 
-### Phase 1：後端核心功能
+### Phase 1：後端核心功能 ✅
 - 記帳 API（`POST /api/accounting/record`）
 - LLM 解析（GPT-4 提取結構化資料）
-- Google Sheets 寫入（Service Account 模式，GCP 專案待建立）
+- Google Sheets 寫入
+- 理財回饋功能
 
-### Phase 2：Siri 捷徑整合
+### Phase 2：Siri 捷徑整合 ✅
 - API Token 認證機制（保護 API）
-- Siri 捷徑設定文件撰寫
-- （現有 note_money 已可被 Siri 呼叫，需遷移至新結構）
+- Bearer Token 驗證
+- Siri 捷徑設定文件
 
-### Phase 3：前端開發
-- 網頁 UI（React + shadcn/ui）
+### Phase 3：前端基礎建設 ✅
+- React + TypeScript + Vite + shadcn/ui
 - 語音輸入（Web Speech API STT）
 - 語音輸出（Web Speech API TTS）
 
-### Phase 4：功能補強
-- 統計查詢 API
-- 理財回饋功能（LLM 生成建議）
+### Phase 4：前端功能整合 ✅
+- OpenAI TTS 自然語音（`gpt-4o-mini-tts` 模型，支援 11 種聲音）
+- 統計頁面（圓餅圖、類別明細）
+- 查詢介面（自然語言查詢帳務）
+- 設定頁面（Token 管理、語音設定）
+- 底部導航列（記帳/統計/查詢/設定）
 
-### Phase 5：Google OAuth 2.0
-- 用戶登入流程
-- 用戶自己的 Google Sheet
-- Token 儲存（SQLite / Cloud SQL）
+### Phase 5：Google OAuth 2.0 ✅
+- Google OAuth 登入流程
+- 用戶專屬 Google Sheet（使用用戶的 OAuth Token）
+- SQLite 資料庫（用戶、Token、Sheet 關聯）
+- JWT Session 管理
+- 從 Google Drive 列出並選擇現有 Sheet（需 `drive.readonly` 權限）
+- 月份分頁管理（YYYY-MM 格式，自動建立）
+- API Token 綁定用戶
 
-### Phase 6：部署與文件
+### Phase 6：部署與文件 🔲
 - GCP 部署設定
 - README 與使用文件
 
