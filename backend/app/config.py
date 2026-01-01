@@ -13,13 +13,6 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-    # Google Sheets (Service Account)
-    GOOGLE_SERVICE_ACCOUNT_FILE: str = os.getenv(
-        "GOOGLE_SERVICE_ACCOUNT_FILE", "./credentials/service-account.json"
-    )
-    GOOGLE_SHEET_URL: str = os.getenv("GOOGLE_SHEET_URL", "")
-    GOOGLE_SHEET_WORKSHEET: str = os.getenv("GOOGLE_SHEET_WORKSHEET", "記帳")
-
     # Server
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
@@ -30,7 +23,7 @@ class Settings:
         "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
     ).split(",")
 
-    # Google OAuth (Phase 5)
+    # Google OAuth
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI: str = os.getenv(
@@ -44,7 +37,7 @@ class Settings:
         "https://www.googleapis.com/auth/drive.readonly",  # 讀取所有 Drive 檔案列表
     ]
 
-    # JWT (Phase 5)
+    # JWT
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-this-secret-key-in-production")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24 hours

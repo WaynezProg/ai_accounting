@@ -49,8 +49,7 @@
 - Python 3.11+
 - Node.js 18+
 - OpenAI API Key
-- Google Cloud 專案 + Service Account
-- Google OAuth 2.0 憑證（可選，用於用戶登入）
+- Google Cloud 專案 + OAuth 2.0 憑證
 
 ### 一鍵啟動
 
@@ -91,17 +90,19 @@ cp backend/.env.example backend/.env
 **.env 必填項目：**
 
 ```bash
-# 基本設定
+# OpenAI
 OPENAI_API_KEY=sk-xxx
-GOOGLE_SERVICE_ACCOUNT_FILE=./credentials/service-account.json
-GOOGLE_SHEET_URL=https://docs.google.com/spreadsheets/d/xxx
 
-# Google OAuth（可選，用於用戶登入）
+# Google OAuth（必填，用於用戶登入和存取 Sheets）
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 
 # JWT（用於 OAuth 登入）
 JWT_SECRET_KEY=your-secret-key
+
+# 前端 URL
+FRONTEND_URL=http://localhost:5173
 ```
 
 ### 分別啟動
@@ -171,7 +172,7 @@ npm run dev
 | POST | `/api/auth/logout` | ✅ | 登出 |
 | GET | `/api/auth/me` | ✅ | 取得當前用戶資訊 |
 | GET | `/api/auth/status` | ❌ | 檢查認證狀態 |
-| POST | `/api/auth/token/generate` | ❌ | 產生 API Token |
+| POST | `/api/auth/token/generate` | ✅ | 產生 API Token（需登入）|
 | GET | `/api/auth/token/list` | ✅ | 列出用戶的 API Token |
 | DELETE | `/api/auth/token/{id}` | ✅ | 撤銷 API Token |
 | GET | `/api/auth/token/verify` | ✅ | 驗證 Token |
@@ -248,7 +249,6 @@ ai_accounting/
 │   │   │   └── crud.py          # CRUD 操作
 │   │   ├── services/
 │   │   │   ├── openai_service.py
-│   │   │   ├── google_sheets.py
 │   │   │   ├── user_sheets_service.py
 │   │   │   ├── oauth_service.py
 │   │   │   └── jwt_service.py
@@ -258,7 +258,7 @@ ai_accounting/
 │   │       ├── auth.py          # 認證工具
 │   │       ├── categories.py    # 類別定義
 │   │       └── exceptions.py    # 自訂例外
-│   ├── credentials/             # Service Account 憑證
+│   ├── credentials/             # 憑證（如有需要）
 │   ├── data/                    # SQLite 資料庫
 │   ├── requirements.txt
 │   └── .env

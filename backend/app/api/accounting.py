@@ -21,7 +21,6 @@ from app.models.schemas import (
     StatsResponse,
 )
 from app.services.openai_service import openai_service
-from app.services.google_sheets import google_sheets_service
 from app.services.user_sheets_service import create_user_sheets_service
 from app.services.oauth_service import oauth_service
 from app.utils.categories import DEFAULT_CATEGORIES
@@ -36,42 +35,48 @@ async def get_sheets_service_for_user(
     db: Session,
 ):
     """
-    根據用戶類型取得對應的 Sheets 服務和 Sheet ID
+    取得用戶的 Sheets 服務和 Sheet ID
 
-    - OAuth 用戶：使用用戶專屬的 Sheet
-    - API Token 用戶（有綁定用戶）：使用綁定用戶的 Sheet
-    - 匿名 API Token：使用共用 Service Account Sheet
+    所有記帳都必須使用 OAuth 認證，寫入用戶專屬的 Sheet。
 
     Returns:
-        (sheets_service, sheet_id) 或 (None, None) 表示使用共用 Sheet
+        (sheets_service, sheet_id) 或拋出 HTTPException
     """
     if not current_user:
-        return None, None
+        raise HTTPException(status_code=401, detail="需要認證")
 
     user_id = current_user.get("user_id")
-    auth_type = current_user.get("auth_type")
 
-    # 沒有綁定用戶的 API Token 使用共用 Sheet
+    # 必須有綁定用戶
     if not user_id:
-        return None, None
+        raise HTTPException(
+            status_code=403,
+            detail="此 API Token 未綁定用戶帳號。請先登入網頁版產生新的 Token。",
+        )
 
     # 取得用戶的 Sheet 資訊
     user_sheet = get_user_sheet(db, user_id)
     if not user_sheet:
-        # 用戶尚未建立 Sheet，使用共用 Sheet
-        return None, None
+        raise HTTPException(
+            status_code=400,
+            detail="尚未設定 Google Sheet。請先登入網頁版並建立或連結 Sheet。",
+        )
 
     # 取得用戶的 Google Token
     google_token = get_google_token(db, user_id)
     if not google_token:
-        # 沒有 Google Token，使用共用 Sheet
-        return None, None
+        raise HTTPException(
+            status_code=400,
+            detail="Google 授權已失效。請重新登入網頁版授權。",
+        )
 
     # 檢查並刷新 Token
     if is_google_token_expired(google_token):
         if not google_token.refresh_token:
-            logger.warning(f"Token expired for user {user_id}, no refresh token")
-            return None, None
+            raise HTTPException(
+                status_code=400,
+                detail="Google 授權已過期且無法自動刷新。請重新登入網頁版授權。",
+            )
 
         try:
             new_access_token, new_expires_at = await oauth_service.refresh_access_token(
@@ -84,9 +89,13 @@ async def get_sheets_service_for_user(
                 refresh_token=google_token.refresh_token,
                 expires_at=new_expires_at,
             )
+            logger.info(f"Token refreshed for user {user_id}")
         except Exception as e:
             logger.error(f"Token refresh failed for user {user_id}: {e}")
-            return None, None
+            raise HTTPException(
+                status_code=400,
+                detail="Google 授權刷新失敗。請重新登入網頁版授權。",
+            )
 
     # 建立用戶專屬的 Sheets 服務
     sheets_service = create_user_sheets_service(
@@ -107,13 +116,13 @@ async def record_accounting(
     """
     記帳端點
 
-    接收語音轉文字內容，使用 LLM 解析後寫入 Google Sheets
+    接收語音轉文字內容，使用 LLM 解析後寫入用戶專屬的 Google Sheet。
 
-    需要在 Authorization header 提供 Bearer Token（JWT 或 API Token）
+    需要在 Authorization header 提供 Bearer Token（JWT 或已綁定用戶的 API Token）
 
-    - OAuth 登入用戶：寫入用戶專屬 Sheet
-    - API Token（已綁定用戶）：寫入綁定用戶的 Sheet
-    - API Token（未綁定用戶）：寫入共用 Sheet
+    使用條件：
+    - 必須登入或使用已綁定用戶的 API Token
+    - 必須已建立或連結 Google Sheet
     """
     if not current_user:
         raise HTTPException(status_code=401, detail="需要認證")
@@ -123,25 +132,16 @@ async def record_accounting(
     # 1. 使用 LLM 解析記帳文字
     record = await openai_service.parse_accounting_text(request.text)
 
-    # 2. 取得對應的 Sheets 服務
+    # 2. 取得用戶的 Sheets 服務（會驗證所有必要條件）
     user_sheets_service, sheet_id = await get_sheets_service_for_user(current_user, db)
 
-    # 3. 寫入 Google Sheets
-    if user_sheets_service and sheet_id:
-        # 使用用戶專屬 Sheet
-        await user_sheets_service.write_record(sheet_id, record)
-        logger.info(f"Written to user sheet: {sheet_id}")
-    else:
-        # 使用共用 Sheet（Service Account 模式）
-        await google_sheets_service.write_record(record)
-        logger.info("Written to shared sheet")
+    # 3. 寫入用戶專屬的 Google Sheet
+    await user_sheets_service.write_record(sheet_id, record)
+    logger.info(f"Written to user sheet: {sheet_id}")
 
     # 4. 取得統計資料並生成理財回饋
     try:
-        if user_sheets_service and sheet_id:
-            stats = await user_sheets_service.get_monthly_stats(sheet_id)
-        else:
-            stats = await google_sheets_service.get_monthly_stats()
+        stats = await user_sheets_service.get_monthly_stats(sheet_id)
         feedback = await openai_service.generate_feedback(record, stats)
     except Exception as e:
         logger.warning(f"Failed to generate feedback: {e}")
@@ -167,20 +167,16 @@ async def get_stats(
 
     如果未指定月份，則回傳當月統計
 
-    需要在 Authorization header 提供 Bearer Token（JWT 或 API Token）
+    需要在 Authorization header 提供 Bearer Token（JWT 或已綁定用戶的 API Token）
     """
     if not current_user:
         raise HTTPException(status_code=401, detail="需要認證")
 
     logger.info(f"Getting stats for month: {month or 'current'}")
 
-    # 取得對應的 Sheets 服務
+    # 取得用戶的 Sheets 服務
     user_sheets_service, sheet_id = await get_sheets_service_for_user(current_user, db)
-
-    if user_sheets_service and sheet_id:
-        stats = await user_sheets_service.get_monthly_stats(sheet_id, month)
-    else:
-        stats = await google_sheets_service.get_monthly_stats(month)
+    stats = await user_sheets_service.get_monthly_stats(sheet_id, month)
 
     return StatsResponse(
         success=True,
@@ -199,21 +195,18 @@ async def query_accounting(
 
     使用自然語言查詢帳務狀況
 
-    需要在 Authorization header 提供 Bearer Token（JWT 或 API Token）
+    需要在 Authorization header 提供 Bearer Token（JWT 或已綁定用戶的 API Token）
     """
     if not current_user:
         raise HTTPException(status_code=401, detail="需要認證")
 
     logger.info(f"Query: {request.query}")
 
-    # 取得對應的 Sheets 服務
+    # 取得用戶的 Sheets 服務
     user_sheets_service, sheet_id = await get_sheets_service_for_user(current_user, db)
 
     # 1. 取得統計資料
-    if user_sheets_service and sheet_id:
-        stats = await user_sheets_service.get_monthly_stats(sheet_id)
-    else:
-        stats = await google_sheets_service.get_monthly_stats()
+    stats = await user_sheets_service.get_monthly_stats(sheet_id)
 
     # 2. 使用 LLM 回答問題
     response = await openai_service.answer_query(request.query, stats)

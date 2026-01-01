@@ -47,6 +47,14 @@ function LoadingIcon({ className }: { className?: string }) {
   );
 }
 
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
 export default function HomePage() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -80,6 +88,7 @@ export default function HomePage() {
     isLoading: openaiIsLoading,
     error: openaiError,
     setVoice,
+    isCached,
   } = useOpenAITTS(settings.ttsVoice);
 
   const isSpeaking = settings.useNaturalVoice ? (openaiIsSpeaking || openaiIsLoading) : webIsSpeaking;
@@ -136,10 +145,6 @@ export default function HomePage() {
         setLastResult(response.record);
         setLastFeedback(response.feedback);
         toast.success(response.message);
-
-        // Speak the feedback (理財回饋) if available, otherwise speak the message
-        const textToSpeak = response.feedback || response.message;
-        await speakMessage(textToSpeak);
 
         // Clear input
         setInputText('');
@@ -244,7 +249,27 @@ export default function HomePage() {
             </div>
             {lastFeedback && (
               <div className="mt-4 rounded-lg bg-muted p-3 text-sm">
-                <div className="font-medium mb-1">理財回饋</div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-medium">理財回饋</div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => speakMessage(lastFeedback)}
+                    disabled={isSpeaking}
+                  >
+                    {openaiIsLoading ? (
+                      <LoadingIcon className="h-4 w-4 animate-spin" />
+                    ) : isSpeaking ? (
+                      <SpeakerIcon className="h-4 w-4 text-primary" />
+                    ) : (
+                      <PlayIcon className="h-4 w-4" />
+                    )}
+                    <span className="ml-1 text-xs">
+                      {openaiIsLoading ? '載入中' : isSpeaking ? '播放中' : (settings.useNaturalVoice && isCached(lastFeedback) ? '再聽一次' : '聆聽')}
+                    </span>
+                  </Button>
+                </div>
                 <div className="text-muted-foreground">{lastFeedback}</div>
               </div>
             )}
@@ -252,11 +277,16 @@ export default function HomePage() {
         </Card>
       )}
 
-      {/* Speaking Indicator */}
+      {/* Speaking Indicator - Click to stop */}
       {isSpeaking && (
         <div
-          className="fixed bottom-20 right-4 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg flex items-center gap-2 cursor-pointer"
-          onClick={() => settings.useNaturalVoice && openaiStop()}
+          className="fixed bottom-20 right-4 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg flex items-center gap-2 cursor-pointer hover:bg-primary/90 transition-colors"
+          onClick={() => {
+            if (settings.useNaturalVoice) {
+              openaiStop();
+            }
+          }}
+          title="點擊停止播放"
         >
           {openaiIsLoading ? (
             <>
@@ -266,7 +296,7 @@ export default function HomePage() {
           ) : (
             <>
               <SpeakerIcon className="h-4 w-4" />
-              正在播放{settings.useNaturalVoice ? ' AI ' : ''}語音...
+              播放中（點擊停止）
             </>
           )}
         </div>

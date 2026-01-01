@@ -71,7 +71,7 @@ Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6
 **後端核心：**
 - ✅ FastAPI 應用程式架構
 - ✅ OpenAI GPT-4 記帳解析（含重試機制）
-- ✅ Google Sheets 讀寫（Service Account 模式）
+- ✅ Google Sheets 讀寫（OAuth 模式）
 - ✅ 理財回饋生成
 - ✅ 自然語言查詢
 - ✅ 月度統計功能
@@ -175,7 +175,7 @@ Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6
 | GET | `/api/accounting/categories` | ❌ | 1 | ✅ |
 | GET | `/api/accounting/stats` | ✅ Token | 1 | ✅ |
 | POST | `/api/accounting/query` | ✅ Token | 1 | ✅ |
-| POST | `/api/auth/token/generate` | ✅ OAuth | 2 | ✅ |
+| POST | `/api/auth/token/generate` | ✅ OAuth（需登入）| 2 | ✅ |
 | GET | `/api/auth/token/verify` | ✅ Token | 2 | ✅ |
 | GET | `/api/auth/token/list` | ✅ OAuth | 5 | ✅ |
 | DELETE | `/api/auth/token/{id}` | ✅ OAuth | 5 | ✅ |

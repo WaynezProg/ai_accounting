@@ -265,19 +265,27 @@ def generate_token(
     """
     產生新的 API Token
 
-    此 Token 用於 Siri 捷徑等外部服務呼叫 API
+    此 Token 用於 Siri 捷徑等外部服務呼叫 API。
+    Token 會綁定到當前登入的用戶帳號。
 
-    - 已登入用戶：Token 綁定用戶帳號
-    - 未登入用戶：產生匿名 Token（向後相容）
+    **必須先登入才能產生 Token**
     """
-    user_id = None
-    if current_user:
-        user_id = current_user.get("user_id")
-        logger.info(f"Generating token for user: {user_id}")
-    else:
-        logger.info("Generating anonymous token")
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="必須先登入才能產生 API Token。請先在網頁版使用 Google 帳號登入。",
+        )
 
-    # 使用新的資料庫 CRUD
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="無效的用戶。請重新登入。",
+        )
+
+    logger.info(f"Generating token for user: {user_id}")
+
+    # 產生綁定用戶的 API Token
     raw_token, api_token = create_api_token(
         db,
         description=request.description,
@@ -291,7 +299,7 @@ def generate_token(
         description=api_token.description,
         created_at=api_token.created_at.isoformat(),
         expires_at=api_token.expires_at.isoformat() if api_token.expires_at else None,
-        message="Token 已產生，請妥善保管",
+        message="Token 已產生並綁定您的帳號，請妥善保管。可用於 Siri 捷徑記帳。",
     )
 
 

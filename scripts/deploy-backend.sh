@@ -55,7 +55,7 @@ TURSO_AUTH_TOKEN=TURSO_AUTH_TOKEN:latest" \
 PORT=8080,\
 GOOGLE_REDIRECT_URI=https://ai-accounting-api-51386650140.asia-east1.run.app/api/auth/google/callback,\
 FRONTEND_URL=https://ai-accounting.vercel.app,\
-CORS_ORIGINS=https://ai-accounting.vercel.app,https://ai-accounting-waynezprog.vercel.app"
+CORS_ORIGINS=https://ai-accounting.vercel.app,https://ai-accounting-waynezprog.vercel.app,https://frontend-omega-eight-30.vercel.app"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  部署完成!${NC}"
