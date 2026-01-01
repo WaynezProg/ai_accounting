@@ -14,9 +14,18 @@ from googleapiclient.errors import HttpError
 
 from app.config import settings
 from app.models.schemas import AccountingRecord, MonthlyStats
-from app.services.google_sheets import GoogleSheetsError
 
 logger = logging.getLogger(__name__)
+
+
+class GoogleSheetsError(Exception):
+    """Google Sheets 操作錯誤"""
+
+    def __init__(self, code: str, message: str):
+        self.code = code
+        self.message = message
+        super().__init__(f"{code}: {message}")
+
 
 # Sheet 標題列
 SHEET_HEADERS = ["時間", "名稱", "類別", "花費", "幣別", "支付方式"]

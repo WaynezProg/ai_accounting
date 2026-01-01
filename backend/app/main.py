@@ -11,7 +11,7 @@ from app.api import health, accounting, auth, speech, sheets
 from app.database import init_db, close_db
 from app.utils.exceptions import AppException
 from app.services.openai_service import OpenAIServiceError
-from app.services.google_sheets import GoogleSheetsError
+from app.services.user_sheets_service import GoogleSheetsError
 
 # 設定日誌
 logging.basicConfig(

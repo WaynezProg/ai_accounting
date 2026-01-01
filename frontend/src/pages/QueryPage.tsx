@@ -150,6 +150,11 @@ export default function QueryPage() {
       return;
     }
 
+    // 如果麥克風正在聆聽，先停止它
+    if (isListening) {
+      stopListening();
+    }
+
     setIsLoading(true);
     try {
       const response = await queryAccounting(query);

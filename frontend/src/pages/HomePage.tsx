@@ -138,6 +138,11 @@ export default function HomePage() {
       return;
     }
 
+    // 如果麥克風正在聆聽，先停止它
+    if (isListening) {
+      stopListening();
+    }
+
     setIsLoading(true);
     try {
       const response = await createEntry(inputText);
