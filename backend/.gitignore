@@ -1,0 +1,66 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# =========================
+# Environment & secrets
+# =========================
+.env
+.env.development
+.env.production
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials/
+secrets/
+*-service-account.json
+*serviceaccount*.json
+
+# =========================
+# Logs
+# =========================
+logs/
+
+# =========================
+# Database & data
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+data/
+tokens.json
+
+# =========================
+# Tests & coverage
+# =========================
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+.nyc_output/

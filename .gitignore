@@ -1,153 +1,38 @@
 # =========================
-# Python
+# Editors & OS
 # =========================
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
-venv/
-ENV/
-env/
-.venv/
-
-# =========================
-# Node.js
-# =========================
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# =========================
-# IDE & Editors
-# =========================
-# VSCode
 .vscode/
 *.code-workspace
-
-# JetBrains (PyCharm, WebStorm, etc.)
 .idea/
 *.iml
 *.iws
 *.ipr
-
-# Sublime Text
 *.sublime-project
 *.sublime-workspace
-
-# Vim
 *.swp
 *.swo
 *~
-
-# Emacs
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-
-# =========================
-# macOS
-# =========================
+#*#
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
 .Spotlight-V100
 .Trashes
-
-# =========================
-# Windows
-# =========================
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
-
-# =========================
-# Linux
-# =========================
-*~
 .fuse_hidden*
 .directory
 .Trash-*
 .nfs*
 
 # =========================
-# Environment & Secrets
+# Logs & misc
 # =========================
-.env
-.env.development
-.env.production
-.env.local
-.env.*.local
-*.pem
-*.key
-credentials/
-secrets/
-
-# Google Service Account (敏感憑證)
-*-service-account.json
-*serviceaccount*.json
-note-money-*.json
-
-# =========================
-# Logs
-# =========================
-logs/
 *.log
-npm-debug.log*
-
-# =========================
-# Database
-# =========================
-*.db
-*.sqlite
-*.sqlite3
-
-# =========================
-# Build outputs
-# =========================
-dist/
-build/
-out/
-.next/
-.nuxt/
-
-# =========================
-# Test & Coverage
-# =========================
-coverage/
-.coverage
-htmlcov/
-.tox/
-.pytest_cache/
-.nyc_output/
-
-# =========================
-# Misc
-# =========================
 *.bak
 *.tmp
 *.temp
@@ -156,21 +41,10 @@ htmlcov/
 # =========================
 # Project specific
 # =========================
-# MCP 設定
 .mcp.json
 .claude/
-
-# 舊專案（已移除）
 note_money/
-
-# Vercel
 .vercel/
-
-# Docker
 docker-compose.override.yml
-
-# .git-backup-XXXX
 .git-backup-*/
-
-# fixes doc
 docs/fixes doc/
