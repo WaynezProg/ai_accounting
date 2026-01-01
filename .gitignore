@@ -168,3 +168,9 @@ note_money/
 
 # Docker
 docker-compose.override.yml
+
+# .git-backup-XXXX
+.git-backup-*/
+
+# fixes doc
+docs/fixes doc/
