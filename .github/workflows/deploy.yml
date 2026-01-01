@@ -101,7 +101,8 @@ jobs:
         run: |
           cd frontend
           # 直接部署，讓 Vercel 平台處理 build
-          url=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }})
+          # --force 清除 build cache 避免快取問題
+          url=$(vercel deploy --prod --yes --force --token=${{ secrets.VERCEL_TOKEN }})
           echo "Frontend URL: $url"
           echo "frontend_url=$url" >> $GITHUB_OUTPUT
 
