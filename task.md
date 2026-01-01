@@ -13,9 +13,9 @@
 | Google Sheets 模式 | 每個用戶自己的 Sheet（OAuth 2.0 用戶授權） |
 | Siri 捷徑認證 | API Key / Token（網頁端產生，手動設定到捷徑） |
 | 開發環境 | 本地開發（後端 8000、前端 5173） |
-| 部署環境 | Google Cloud Platform (GCP) |
+| 部署環境 | Cloud Run + Turso + Vercel |
 | 記帳類別 | 混合模式（預設類別 + LLM 可建議新類別） |
-| Token 儲存 | SQLite（本地）/ Cloud SQL（GCP） |
+| Token 儲存 | SQLite（本地）/ Turso libSQL（生產） |
 | 前端 UI | shadcn/ui (Radix UI + Tailwind CSS) |
 
 ---
@@ -28,7 +28,11 @@
 - **LLM**: OpenAI API
 - **資料儲存**:
   - 記帳資料：Google Sheets API（用戶自己的 Sheet）
-  - Token/用戶資料：SQLite（本地）/ Cloud SQL（GCP）
+  - Token/用戶資料：SQLite（本地）/ Turso libSQL（生產）
+- **部署平台**:
+  - 後端 API：GCP Cloud Run（asia-east1 台灣彰化）
+  - 前端：Vercel（全球 CDN）
+  - 資料庫：Turso（libSQL，邊緣節點）
 - **認證**:
   - 網頁端：Google OAuth 2.0
   - Siri 捷徑：API Token（Bearer Token）
@@ -143,7 +147,7 @@ ai_accounting/
 
 ## 環境變數
 
-### 後端 (.env)
+### 後端 (.env) - 本地開發
 ```bash
 # OpenAI
 OPENAI_API_KEY=sk-xxx
@@ -154,21 +158,37 @@ GOOGLE_CLIENT_SECRET=xxx
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 
 # 安全
-SECRET_KEY=random-secret-for-token-signing
+JWT_SECRET_KEY=random-secret-for-jwt-signing
 
-# 資料庫
-# 本地開發用 SQLite
-DATABASE_URL=sqlite:///./data.db
-# GCP 生產環境用 Cloud SQL（PostgreSQL）
-# DATABASE_URL=postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
+# 資料庫（本地開發用 SQLite）
+DATABASE_URL=sqlite+aiosqlite:///./data/app.db
 
 # 環境
-ENV=development  # development | production
+ENV=development
+```
+
+### 後端 - 生產環境（Cloud Run + Supabase）
+```bash
+# 透過 GCP Secret Manager 管理
+OPENAI_API_KEY=openai-api-key:latest
+GOOGLE_CLIENT_ID=google-client-id:latest
+GOOGLE_CLIENT_SECRET=google-client-secret:latest
+DATABASE_URL=database-url:latest  # postgresql+asyncpg://...@db.xxx.supabase.co:5432/postgres
+JWT_SECRET_KEY=jwt-secret-key:latest
+
+# 環境變數
+ENV=production
+GOOGLE_REDIRECT_URI=https://your-api.run.app/api/auth/google/callback
+FRONTEND_URL=https://your-app.vercel.app
 ```
 
 ### 前端 (.env)
 ```bash
+# 本地開發
 VITE_API_BASE_URL=http://localhost:8000
+
+# 生產環境（Vercel 環境變數）
+VITE_API_BASE_URL=https://your-api.run.app
 ```
 
 ---
@@ -569,7 +589,7 @@ GET /api/accounting/stats?month=2024-01
 | Phase 3 | 前端基礎建設 | ✅ 完成 |
 | Phase 4 | 前端功能整合 | ✅ 完成 |
 | Phase 5 | Google OAuth 2.0 | ✅ 完成 |
-| Phase 6 | 部署與文件 | 🔲 待開發 |
+| Phase 6 | 部署與文件 | ✅ 完成 |
 
 ---
 
@@ -610,9 +630,17 @@ GET /api/accounting/stats?month=2024-01
 - 月份分頁管理（YYYY-MM 格式，自動建立）
 - API Token 綁定用戶
 
-### Phase 6：部署與文件 🔲
-- GCP 部署設定
-- README 與使用文件
+### Phase 6：部署上線 ✅
+- **架構**: Cloud Run + Turso + Vercel
+- **後端**: GCP Cloud Run（asia-east1 台灣彰化，低延遲 ~5-10ms）
+- **資料庫**: Turso libSQL（邊緣節點，免費方案，SQLite 相容）
+- **前端**: Vercel（全球 CDN，免費方案）
+- **預估成本**: ~$2-11 USD/月（~64-352 TWD）
+- **生產環境 URL**:
+  - 前端: https://frontend-omega-eight-30.vercel.app
+  - 後端: https://ai-accounting-api-51386650140.asia-east1.run.app
+- **啟動腳本**: `./start.sh [dev|prod]` 支援開發/生產環境切換
+- 詳細部署步驟請參考 [Phase 6 文件](docs/phases/phase-6-deployment.md)
 
 ---
 
@@ -626,13 +654,68 @@ GET /api/accounting/stats?month=2024-01
 
 ---
 
-## 後續擴充功能（可選）
+## 後續擴充功能
+
+### Phase 7：React Native App（中期目標）
+
+**目標**：開發 iOS + Android 雙平台原生 App
+
+**技術選型**：
+- **框架**：React Native + Expo（共用 React 經驗、跨平台）
+- **UI**：React Native Paper 或 NativeWind（Tailwind for RN）
+- **導航**：React Navigation
+- **狀態管理**：Zustand 或 React Query
+- **語音 STT**：expo-speech-recognition 或 react-native-voice
+- **語音 TTS**：expo-speech（免費）或 OpenAI TTS API
+
+**基本功能**（Phase 7.1）：
+- [ ] 專案初始化（Expo + TypeScript）
+- [ ] Google OAuth 登入（expo-auth-session）
+- [ ] 語音記帳（App 內 STT）
+- [ ] 統計圖表（react-native-chart-kit 或 victory-native）
+- [ ] 自然語言查詢
+- [ ] 設定頁面（語音、Sheet、Token）
+- [ ] 共用後端 API（與網頁版相同）
+
+**進階功能**（Phase 7.2，待規劃）：
+- [ ] iOS Widget（WidgetKit via expo-widgets）
+- [ ] Android Widget
+- [ ] 推播通知（expo-notifications）
+- [ ] 離線支援（本地快取 + 同步）
+- [ ] Siri 整合（iOS SiriKit）
+- [ ] 深色模式
+
+**目錄結構**（預計）：
+```
+mobile/
+├── app/                    # Expo Router 頁面
+│   ├── (tabs)/
+│   │   ├── index.tsx       # 記帳首頁
+│   │   ├── stats.tsx       # 統計
+│   │   ├── query.tsx       # 查詢
+│   │   └── settings.tsx    # 設定
+│   ├── auth/
+│   │   └── callback.tsx    # OAuth 回調
+│   └── _layout.tsx
+├── components/
+├── hooks/
+├── services/
+│   └── api.ts              # 共用 API 呼叫
+├── app.json
+├── package.json
+└── tsconfig.json
+```
+
+---
+
+### 其他功能（可選）
 
 - [ ] 多使用者支援
 - [ ] 記帳類別自訂
 - [ ] 預算設定與提醒
 - [ ] 資料匯出（CSV/Excel）
 - [ ] 記帳歷史查詢與篩選
-- [ ] 圖表視覺化
-- [ ] 多語言支援
+- [ ] 多幣別支援
+- [ ] 週期性支出追蹤
+- [ ] 分享帳本功能
 

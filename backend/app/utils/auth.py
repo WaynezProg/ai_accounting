@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.database.crud import verify_api_token, get_user_by_id
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 
-async def get_current_user_optional(
+def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> Optional[dict]:
     """
     取得當前用戶（可選）
@@ -54,7 +54,7 @@ async def get_current_user_optional(
         }
 
     # 2. 嘗試 API Token 驗證
-    api_token = await verify_api_token(db, token)
+    api_token = verify_api_token(db, token)
     if api_token:
         logger.debug(f"API Token auth, user_id: {api_token.user_id}")
         return {
@@ -68,9 +68,9 @@ async def get_current_user_optional(
     return None
 
 
-async def verify_token(
+def verify_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> bool:
     """
     驗證 Bearer Token（必要）
@@ -108,7 +108,7 @@ async def verify_token(
         return True
 
     # 2. 嘗試 API Token 驗證
-    api_token = await verify_api_token(db, token)
+    api_token = verify_api_token(db, token)
     if api_token:
         logger.info(f"API Token verified: {token[:8]}...")
         return True
@@ -125,9 +125,9 @@ async def verify_token(
     )
 
 
-async def get_current_user(
+def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> dict:
     """
     取得當前用戶（必要）
@@ -144,7 +144,7 @@ async def get_current_user(
     Raises:
         HTTPException: 如果未認證
     """
-    user = await get_current_user_optional(credentials, db)
+    user = get_current_user_optional(credentials, db)
 
     if user is None:
         raise HTTPException(
@@ -159,9 +159,9 @@ async def get_current_user(
     return user
 
 
-async def optional_verify_token(
+def optional_verify_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> Optional[bool]:
     """
     可選的 Token 驗證
@@ -185,5 +185,5 @@ async def optional_verify_token(
         return True
 
     # 嘗試 API Token 驗證
-    api_token = await verify_api_token(db, token)
+    api_token = verify_api_token(db, token)
     return api_token is not None

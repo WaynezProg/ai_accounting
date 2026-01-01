@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Cookie
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
@@ -123,7 +123,7 @@ async def google_login():
 async def google_callback(
     code: str = Query(..., description="Google 授權碼"),
     state: str = Query(..., description="CSRF state 參數"),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Google OAuth 回調端點
@@ -146,7 +146,7 @@ async def google_callback(
         user_info = await oauth_service.get_user_info(access_token)
 
         # 4. 建立或更新用戶
-        user, is_new = await get_or_create_user(
+        user, is_new = get_or_create_user(
             db,
             user_id=user_info["id"],
             email=user_info["email"],
@@ -155,7 +155,7 @@ async def google_callback(
         )
 
         # 5. 儲存 Google Token
-        await save_google_token(
+        save_google_token(
             db,
             user_id=user.id,
             access_token=access_token,
@@ -206,9 +206,9 @@ async def logout(
 
 
 @router.get("/me", response_model=MeResponse)
-async def get_me(
+def get_me(
     current_user: dict = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     取得當前登入用戶資訊
@@ -223,7 +223,7 @@ async def get_me(
 
     if auth_type == "jwt":
         # JWT 登入的用戶
-        user = await get_user_by_id(db, user_id)
+        user = get_user_by_id(db, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="用戶不存在")
 
@@ -257,10 +257,10 @@ async def get_me(
 
 
 @router.post("/token/generate", response_model=TokenResponse)
-async def generate_token(
+def generate_token(
     request: GenerateTokenRequest,
     current_user: Optional[dict] = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     產生新的 API Token
@@ -278,7 +278,7 @@ async def generate_token(
         logger.info("Generating anonymous token")
 
     # 使用新的資料庫 CRUD
-    raw_token, api_token = await create_api_token(
+    raw_token, api_token = create_api_token(
         db,
         description=request.description,
         user_id=user_id,
@@ -296,9 +296,9 @@ async def generate_token(
 
 
 @router.get("/token/list", response_model=APITokenListResponse)
-async def list_tokens(
+def list_tokens(
     current_user: dict = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     列出當前用戶的所有 API Token
@@ -312,7 +312,7 @@ async def list_tokens(
     if not user_id:
         raise HTTPException(status_code=401, detail="無效的用戶")
 
-    tokens = await get_user_api_tokens(db, user_id)
+    tokens = get_user_api_tokens(db, user_id)
 
     return APITokenListResponse(
         success=True,
@@ -331,10 +331,10 @@ async def list_tokens(
 
 
 @router.delete("/token/{token_id}")
-async def delete_token(
+def delete_token(
     token_id: int,
     current_user: dict = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     撤銷 API Token
@@ -348,7 +348,7 @@ async def delete_token(
     if not user_id:
         raise HTTPException(status_code=401, detail="無效的用戶")
 
-    success = await revoke_api_token(db, token_id, user_id)
+    success = revoke_api_token(db, token_id, user_id)
 
     if not success:
         raise HTTPException(status_code=404, detail="Token 不存在或無權限")

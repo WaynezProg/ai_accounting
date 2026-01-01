@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.database.models import User, GoogleToken, APIToken, UserSheet
 
@@ -19,20 +19,20 @@ logger = logging.getLogger(__name__)
 # =========================
 
 
-async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
+def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
     """根據 ID 取得用戶"""
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """根據 Email 取得用戶"""
-    result = await db.execute(select(User).where(User.email == email))
+    result = db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
 
 
-async def create_user(
-    db: AsyncSession,
+def create_user(
+    db: Session,
     user_id: str,
     email: str,
     name: str,
@@ -46,14 +46,14 @@ async def create_user(
         picture=picture,
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    db.commit()
+    db.refresh(user)
     logger.info(f"Created user: {email}")
     return user
 
 
-async def update_user(
-    db: AsyncSession,
+def update_user(
+    db: Session,
     user: User,
     name: Optional[str] = None,
     picture: Optional[str] = None,
@@ -64,26 +64,26 @@ async def update_user(
     if picture is not None:
         user.picture = picture
     user.updated_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(user)
+    db.commit()
+    db.refresh(user)
     return user
 
 
-async def get_or_create_user(
-    db: AsyncSession,
+def get_or_create_user(
+    db: Session,
     user_id: str,
     email: str,
     name: str,
     picture: Optional[str] = None,
 ) -> tuple[User, bool]:
     """取得或建立用戶，回傳 (user, is_new)"""
-    user = await get_user_by_id(db, user_id)
+    user = get_user_by_id(db, user_id)
     if user:
         # 更新用戶資料
-        user = await update_user(db, user, name=name, picture=picture)
+        user = update_user(db, user, name=name, picture=picture)
         return user, False
     else:
-        user = await create_user(db, user_id, email, name, picture)
+        user = create_user(db, user_id, email, name, picture)
         return user, True
 
 
@@ -92,16 +92,16 @@ async def get_or_create_user(
 # =========================
 
 
-async def get_google_token(db: AsyncSession, user_id: str) -> Optional[GoogleToken]:
+def get_google_token(db: Session, user_id: str) -> Optional[GoogleToken]:
     """取得用戶的 Google Token"""
-    result = await db.execute(
+    result = db.execute(
         select(GoogleToken).where(GoogleToken.user_id == user_id)
     )
     return result.scalar_one_or_none()
 
 
-async def save_google_token(
-    db: AsyncSession,
+def save_google_token(
+    db: Session,
     user_id: str,
     access_token: str,
     refresh_token: Optional[str] = None,
@@ -109,7 +109,7 @@ async def save_google_token(
     scope: Optional[str] = None,
 ) -> GoogleToken:
     """儲存或更新 Google Token"""
-    token = await get_google_token(db, user_id)
+    token = get_google_token(db, user_id)
 
     if token:
         # 更新現有 Token
@@ -130,12 +130,12 @@ async def save_google_token(
         )
         db.add(token)
 
-    await db.commit()
-    await db.refresh(token)
+    db.commit()
+    db.refresh(token)
     return token
 
 
-async def is_google_token_expired(token: GoogleToken) -> bool:
+def is_google_token_expired(token: GoogleToken) -> bool:
     """檢查 Google Token 是否過期"""
     if not token.expires_at:
         return False
@@ -158,8 +158,8 @@ def generate_api_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-async def create_api_token(
-    db: AsyncSession,
+def create_api_token(
+    db: Session,
     description: str,
     user_id: Optional[str] = None,
     expires_days: Optional[int] = None,
@@ -179,16 +179,16 @@ async def create_api_token(
         expires_at=expires_at,
     )
     db.add(api_token)
-    await db.commit()
-    await db.refresh(api_token)
+    db.commit()
+    db.refresh(api_token)
 
     logger.info(f"Created API token: {description} for user: {user_id}")
     return raw_token, api_token
 
 
-async def get_api_token_by_hash(db: AsyncSession, token_hash: str) -> Optional[APIToken]:
+def get_api_token_by_hash(db: Session, token_hash: str) -> Optional[APIToken]:
     """根據 hash 取得 API Token"""
-    result = await db.execute(
+    result = db.execute(
         select(APIToken).where(
             APIToken.token_hash == token_hash,
             APIToken.is_active == True,
@@ -197,10 +197,10 @@ async def get_api_token_by_hash(db: AsyncSession, token_hash: str) -> Optional[A
     return result.scalar_one_or_none()
 
 
-async def verify_api_token(db: AsyncSession, raw_token: str) -> Optional[APIToken]:
+def verify_api_token(db: Session, raw_token: str) -> Optional[APIToken]:
     """驗證 API Token，回傳 Token 記錄或 None"""
     token_hash = hash_token(raw_token)
-    token = await get_api_token_by_hash(db, token_hash)
+    token = get_api_token_by_hash(db, token_hash)
 
     if not token:
         return None
@@ -211,14 +211,14 @@ async def verify_api_token(db: AsyncSession, raw_token: str) -> Optional[APIToke
 
     # 更新最後使用時間
     token.last_used_at = datetime.utcnow()
-    await db.commit()
+    db.commit()
 
     return token
 
 
-async def get_user_api_tokens(db: AsyncSession, user_id: str) -> list[APIToken]:
+def get_user_api_tokens(db: Session, user_id: str) -> list[APIToken]:
     """取得用戶的所有 API Token"""
-    result = await db.execute(
+    result = db.execute(
         select(APIToken).where(
             APIToken.user_id == user_id,
             APIToken.is_active == True,
@@ -227,9 +227,9 @@ async def get_user_api_tokens(db: AsyncSession, user_id: str) -> list[APIToken]:
     return list(result.scalars().all())
 
 
-async def revoke_api_token(db: AsyncSession, token_id: int, user_id: str) -> bool:
+def revoke_api_token(db: Session, token_id: int, user_id: str) -> bool:
     """撤銷 API Token"""
-    result = await db.execute(
+    result = db.execute(
         select(APIToken).where(
             APIToken.id == token_id,
             APIToken.user_id == user_id,
@@ -241,7 +241,7 @@ async def revoke_api_token(db: AsyncSession, token_id: int, user_id: str) -> boo
         return False
 
     token.is_active = False
-    await db.commit()
+    db.commit()
     logger.info(f"Revoked API token: {token_id}")
     return True
 
@@ -251,23 +251,23 @@ async def revoke_api_token(db: AsyncSession, token_id: int, user_id: str) -> boo
 # =========================
 
 
-async def get_user_sheet(db: AsyncSession, user_id: str) -> Optional[UserSheet]:
+def get_user_sheet(db: Session, user_id: str) -> Optional[UserSheet]:
     """取得用戶的 Sheet 資訊"""
-    result = await db.execute(
+    result = db.execute(
         select(UserSheet).where(UserSheet.user_id == user_id)
     )
     return result.scalar_one_or_none()
 
 
-async def save_user_sheet(
-    db: AsyncSession,
+def save_user_sheet(
+    db: Session,
     user_id: str,
     sheet_id: str,
     sheet_url: str,
     sheet_name: str = "記帳紀錄",
 ) -> UserSheet:
     """儲存用戶的 Sheet 資訊"""
-    user_sheet = await get_user_sheet(db, user_id)
+    user_sheet = get_user_sheet(db, user_id)
 
     if user_sheet:
         user_sheet.sheet_id = sheet_id
@@ -282,6 +282,6 @@ async def save_user_sheet(
         )
         db.add(user_sheet)
 
-    await db.commit()
-    await db.refresh(user_sheet)
+    db.commit()
+    db.refresh(user_sheet)
     return user_sheet

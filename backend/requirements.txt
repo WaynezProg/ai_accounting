@@ -22,9 +22,11 @@ pandas==2.2.3
 # HTTP client (for future use)
 httpx==0.28.1
 
-# Database (Phase 5)
-sqlalchemy[asyncio]==2.0.45
-aiosqlite==0.22.1
+# Database
+sqlalchemy==2.0.45
+
+# Turso driver (Phase 6 - Production)
+sqlalchemy-libsql==0.2.0
 
 # OAuth & JWT (Phase 5)
 google-auth-oauthlib==1.2.3

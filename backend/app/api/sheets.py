@@ -5,7 +5,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.database.crud import (
@@ -82,7 +82,7 @@ class SelectSheetRequest(BaseModel):
 @router.get("/list", response_model=DriveSheetListResponse)
 async def list_drive_sheets(
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     列出用戶 Google Drive 中的所有 Google Sheets
@@ -96,12 +96,12 @@ async def list_drive_sheets(
         raise HTTPException(status_code=403, detail="此功能需要 Google OAuth 登入")
 
     # 取得用戶的 Google Token
-    google_token = await get_google_token(db, user_id)
+    google_token = get_google_token(db, user_id)
     if not google_token:
         raise HTTPException(status_code=400, detail="找不到 Google Token，請重新登入")
 
     # 檢查並刷新 Token
-    if await is_google_token_expired(google_token):
+    if is_google_token_expired(google_token):
         if not google_token.refresh_token:
             raise HTTPException(status_code=400, detail="Token 已過期，請重新登入")
 
@@ -109,7 +109,7 @@ async def list_drive_sheets(
             new_access_token, new_expires_at = await oauth_service.refresh_access_token(
                 google_token.refresh_token
             )
-            google_token = await save_google_token(
+            google_token = save_google_token(
                 db,
                 user_id=user_id,
                 access_token=new_access_token,
@@ -154,7 +154,7 @@ async def list_drive_sheets(
 async def select_sheet(
     request: SelectSheetRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     從清單中選擇一個 Google Sheet 作為記帳用
@@ -168,7 +168,7 @@ async def select_sheet(
         raise HTTPException(status_code=403, detail="此功能需要 Google OAuth 登入")
 
     # 取得用戶的 Google Token
-    google_token = await get_google_token(db, user_id)
+    google_token = get_google_token(db, user_id)
     if not google_token:
         raise HTTPException(status_code=400, detail="找不到 Google Token，請重新登入")
 
@@ -189,7 +189,7 @@ async def select_sheet(
 
     # 儲存 Sheet 資訊
     sheet_url = f"https://docs.google.com/spreadsheets/d/{request.sheet_id}"
-    user_sheet = await save_user_sheet(
+    user_sheet = save_user_sheet(
         db,
         user_id=user_id,
         sheet_id=request.sheet_id,
@@ -211,9 +211,9 @@ async def select_sheet(
 
 
 @router.get("/my-sheet", response_model=SheetResponse)
-async def get_my_sheet(
+def get_my_sheet(
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     取得當前用戶的 Sheet 資訊
@@ -226,7 +226,7 @@ async def get_my_sheet(
     if auth_type != "jwt":
         raise HTTPException(status_code=403, detail="此功能需要 Google OAuth 登入")
 
-    user_sheet = await get_user_sheet(db, user_id)
+    user_sheet = get_user_sheet(db, user_id)
 
     if not user_sheet:
         return SheetResponse(
@@ -250,7 +250,7 @@ async def get_my_sheet(
 async def create_sheet(
     request: CreateSheetRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     建立用戶專屬的 Google Sheet
@@ -264,7 +264,7 @@ async def create_sheet(
         raise HTTPException(status_code=403, detail="此功能需要 Google OAuth 登入")
 
     # 檢查是否已有 Sheet
-    existing_sheet = await get_user_sheet(db, user_id)
+    existing_sheet = get_user_sheet(db, user_id)
     if existing_sheet:
         return SheetResponse(
             success=True,
@@ -277,12 +277,12 @@ async def create_sheet(
         )
 
     # 取得用戶的 Google Token
-    google_token = await get_google_token(db, user_id)
+    google_token = get_google_token(db, user_id)
     if not google_token:
         raise HTTPException(status_code=400, detail="找不到 Google Token，請重新登入")
 
     # 檢查並刷新 Token
-    if await is_google_token_expired(google_token):
+    if is_google_token_expired(google_token):
         if not google_token.refresh_token:
             raise HTTPException(status_code=400, detail="Token 已過期，請重新登入")
 
@@ -290,7 +290,7 @@ async def create_sheet(
             new_access_token, new_expires_at = await oauth_service.refresh_access_token(
                 google_token.refresh_token
             )
-            google_token = await save_google_token(
+            google_token = save_google_token(
                 db,
                 user_id=user_id,
                 access_token=new_access_token,
@@ -312,7 +312,7 @@ async def create_sheet(
         sheet_id, sheet_url = await sheets_service.create_sheet(title=request.title)
 
         # 儲存 Sheet 資訊
-        user_sheet = await save_user_sheet(
+        user_sheet = save_user_sheet(
             db,
             user_id=user_id,
             sheet_id=sheet_id,
@@ -341,7 +341,7 @@ async def create_sheet(
 async def link_sheet(
     sheet_url: str,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     連結現有的 Google Sheet
@@ -365,7 +365,7 @@ async def link_sheet(
         raise HTTPException(status_code=400, detail="無效的 Google Sheet URL")
 
     # 取得用戶的 Google Token
-    google_token = await get_google_token(db, user_id)
+    google_token = get_google_token(db, user_id)
     if not google_token:
         raise HTTPException(status_code=400, detail="找不到 Google Token，請重新登入")
 
@@ -380,7 +380,7 @@ async def link_sheet(
         raise HTTPException(status_code=403, detail="無法存取該 Google Sheet")
 
     # 儲存 Sheet 資訊
-    user_sheet = await save_user_sheet(
+    user_sheet = save_user_sheet(
         db,
         user_id=user_id,
         sheet_id=sheet_id,

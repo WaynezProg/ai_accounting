@@ -98,6 +98,8 @@ $RECYCLE.BIN/
 # Environment & Secrets
 # =========================
 .env
+.env.development
+.env.production
 .env.local
 .env.*.local
 *.pem
@@ -157,5 +159,12 @@ htmlcov/
 # MCP 設定
 .mcp.json
 .claude/
-# 舊專案（功能重現後刪除）
+
+# 舊專案（已移除）
 note_money/
+
+# Vercel
+.vercel/
+
+# Docker
+docker-compose.override.yml

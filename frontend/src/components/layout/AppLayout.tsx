@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, Link } from 'react-router-dom';
 import BottomNav from './BottomNav';
 
 export default function AppLayout() {
@@ -12,9 +12,22 @@ export default function AppLayout() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-md px-4 py-4 pb-20">
+      <main className="mx-auto max-w-md px-4 py-4 pb-24">
         <Outlet />
       </main>
+
+      {/* Footer Links */}
+      <footer className="fixed bottom-16 left-0 right-0 bg-background/95 backdrop-blur border-t">
+        <div className="mx-auto max-w-md px-4 py-2 flex justify-center gap-4 text-xs text-muted-foreground">
+          <Link to="/privacy" className="hover:text-foreground transition-colors">
+            隱私權政策
+          </Link>
+          <span>|</span>
+          <Link to="/terms" className="hover:text-foreground transition-colors">
+            服務條款
+          </Link>
+        </div>
+      </footer>
 
       {/* Bottom Navigation */}
       <BottomNav />

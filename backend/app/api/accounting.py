@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Query, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.database.crud import (
@@ -33,7 +33,7 @@ router = APIRouter()
 
 async def get_sheets_service_for_user(
     current_user: Optional[dict],
-    db: AsyncSession,
+    db: Session,
 ):
     """
     根據用戶類型取得對應的 Sheets 服務和 Sheet ID
@@ -56,19 +56,19 @@ async def get_sheets_service_for_user(
         return None, None
 
     # 取得用戶的 Sheet 資訊
-    user_sheet = await get_user_sheet(db, user_id)
+    user_sheet = get_user_sheet(db, user_id)
     if not user_sheet:
         # 用戶尚未建立 Sheet，使用共用 Sheet
         return None, None
 
     # 取得用戶的 Google Token
-    google_token = await get_google_token(db, user_id)
+    google_token = get_google_token(db, user_id)
     if not google_token:
         # 沒有 Google Token，使用共用 Sheet
         return None, None
 
     # 檢查並刷新 Token
-    if await is_google_token_expired(google_token):
+    if is_google_token_expired(google_token):
         if not google_token.refresh_token:
             logger.warning(f"Token expired for user {user_id}, no refresh token")
             return None, None
@@ -77,7 +77,7 @@ async def get_sheets_service_for_user(
             new_access_token, new_expires_at = await oauth_service.refresh_access_token(
                 google_token.refresh_token
             )
-            google_token = await save_google_token(
+            google_token = save_google_token(
                 db,
                 user_id=user_id,
                 access_token=new_access_token,
@@ -102,7 +102,7 @@ async def get_sheets_service_for_user(
 async def record_accounting(
     request: AccountingRequest,
     current_user: Optional[dict] = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     記帳端點
@@ -160,7 +160,7 @@ async def record_accounting(
 async def get_stats(
     month: Optional[str] = Query(None, description="月份，格式：YYYY-MM"),
     current_user: Optional[dict] = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     取得月度統計資料
@@ -192,7 +192,7 @@ async def get_stats(
 async def query_accounting(
     request: QueryRequest,
     current_user: Optional[dict] = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     帳務查詢端點

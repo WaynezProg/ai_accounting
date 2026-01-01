@@ -8,6 +8,8 @@ import QueryPage from '@/pages/QueryPage';
 import SettingsPage from '@/pages/SettingsPage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import AuthErrorPage from '@/pages/AuthErrorPage';
+import PrivacyPage from '@/pages/PrivacyPage';
+import TermsPage from '@/pages/TermsPage';
 
 function App() {
   return (
@@ -18,6 +20,10 @@ function App() {
           {/* OAuth callback routes (outside main layout) */}
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/auth/error" element={<AuthErrorPage />} />
+
+          {/* Legal pages (outside main layout) */}
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
 
           {/* Main app routes */}
           <Route path="/" element={<AppLayout />}>

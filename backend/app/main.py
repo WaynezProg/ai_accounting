@@ -137,15 +137,15 @@ async def startup_event():
     logger.info(f"Starting server in {settings.ENV} mode")
     logger.info(f"CORS origins: {settings.CORS_ORIGINS}")
 
-    # 初始化資料庫
-    await init_db()
+    # 初始化資料庫（同步操作）
+    init_db()
     logger.info("Database initialized")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """應用程式關閉時執行"""
-    await close_db()
+    close_db()
     logger.info("Database connection closed")
 
 
