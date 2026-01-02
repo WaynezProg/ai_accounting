@@ -48,3 +48,5 @@ note_money/
 docker-compose.override.yml
 .git-backup-*/
 docs/fixes doc/
+.cursor/
+openspec/

@@ -1,5 +1,9 @@
 # 語音記帳助手
 
+[![Demo Video](https://img.youtube.com/vi/F_JwcnR6pzI/0.jpg)](https://youtube.com/shorts/F_JwcnR6pzI)
+
+> 💡 點擊上圖觀看完整示範影片，展示應用程式的完整工作流程。
+
 整合 Siri 捷徑、LLM 和 Google Sheets 的智慧記帳系統。
 
 ## 功能特色
