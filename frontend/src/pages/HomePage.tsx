@@ -296,7 +296,7 @@ export default function HomePage() {
                         ? '載入中'
                         : isSpeaking
                           ? '播放中'
-                          : ((isOpenAIProvider && isCached(lastFeedback)) || (isEdgeProvider && isEdgeCached(lastFeedback)) ? '再聽一次' : '聆聽')}
+                          : (isOpenAIProvider && isCached(lastFeedback) ? '再聽一次' : '聆聽')}
                     </span>
                   </Button>
                 </div>
