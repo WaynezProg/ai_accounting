@@ -337,6 +337,83 @@ async def create_sheet(
         raise HTTPException(status_code=500, detail=f"建立 Sheet 失敗：{str(e)}")
 
 
+@router.post("/create-new", response_model=SheetResponse)
+async def create_new_sheet(
+    request: CreateSheetRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    強制建立用戶專屬的 Google Sheet 並取代綁定
+
+    需要 OAuth 登入
+    """
+    user_id = current_user.get("user_id")
+    auth_type = current_user.get("auth_type")
+
+    if auth_type != "jwt":
+        raise HTTPException(status_code=403, detail="此功能需要 Google OAuth 登入")
+
+    # 取得用戶的 Google Token
+    google_token = get_google_token(db, user_id)
+    if not google_token:
+        raise HTTPException(status_code=400, detail="找不到 Google Token，請重新登入")
+
+    # 檢查並刷新 Token
+    if is_google_token_expired(google_token):
+        if not google_token.refresh_token:
+            raise HTTPException(status_code=400, detail="Token 已過期，請重新登入")
+
+        try:
+            new_access_token, new_expires_at = await oauth_service.refresh_access_token(
+                google_token.refresh_token
+            )
+            google_token = save_google_token(
+                db,
+                user_id=user_id,
+                access_token=new_access_token,
+                refresh_token=google_token.refresh_token,
+                expires_at=new_expires_at,
+            )
+        except Exception as e:
+            logger.error(f"Token refresh failed: {e}")
+            raise HTTPException(status_code=400, detail="Token 刷新失敗，請重新登入")
+
+    # 建立新 Sheet 並覆寫綁定
+    sheets_service = create_user_sheets_service(
+        access_token=google_token.access_token,
+        refresh_token=google_token.refresh_token,
+        expires_at=google_token.expires_at,
+    )
+
+    try:
+        sheet_id, sheet_url = await sheets_service.create_sheet(title=request.title)
+
+        user_sheet = save_user_sheet(
+            db,
+            user_id=user_id,
+            sheet_id=sheet_id,
+            sheet_url=sheet_url,
+            sheet_name="記帳紀錄",
+        )
+
+        logger.info(f"Created new sheet for user {user_id}: {sheet_id}")
+
+        return SheetResponse(
+            success=True,
+            sheet=SheetInfo(
+                sheet_id=user_sheet.sheet_id,
+                sheet_url=user_sheet.sheet_url,
+                sheet_name=user_sheet.sheet_name,
+            ),
+            message="Sheet 建立成功",
+        )
+
+    except Exception as e:
+        logger.error(f"Create new sheet failed: {e}")
+        raise HTTPException(status_code=500, detail=f"建立 Sheet 失敗：{str(e)}")
+
+
 @router.post("/link")
 async def link_sheet(
     sheet_url: str,

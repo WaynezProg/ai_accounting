@@ -7,6 +7,7 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useOpenAITTS } from '@/hooks/useOpenAITTS';
 import { useSettings } from '@/hooks/useSettings';
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
+import { pickWebVoice } from '@/utils/tts';
 import { queryAccounting, getAuthToken } from '@/services/api';
 
 // Icon components
@@ -89,8 +90,11 @@ export default function QueryPage() {
   // Web Speech API TTS (free)
   const {
     speak: webSpeak,
+    cancel: webCancel,
     isSpeaking: webIsSpeaking,
     isSupported: webTtsSupported,
+    voices: webVoices,
+    setVoice: setWebVoice,
   } = useSpeechSynthesis('zh-TW');
 
   // OpenAI TTS (paid, natural voice)
@@ -101,9 +105,12 @@ export default function QueryPage() {
     isLoading: openaiIsLoading,
     error: openaiError,
     setVoice,
+    setSpeed,
   } = useOpenAITTS(settings.ttsVoice);
 
-  const isSpeaking = settings.useNaturalVoice ? (openaiIsSpeaking || openaiIsLoading) : webIsSpeaking;
+  const isOpenAIProvider = settings.ttsProvider === 'openai';
+  const isSpeaking = isOpenAIProvider ? (openaiIsSpeaking || openaiIsLoading) : webIsSpeaking;
+  const isRemoteLoading = isOpenAIProvider ? openaiIsLoading : false;
 
   // Update input when transcript changes
   useEffect(() => {
@@ -120,21 +127,35 @@ export default function QueryPage() {
   }, [sttError]);
 
   useEffect(() => {
-    if (openaiError) {
+    if (isOpenAIProvider && openaiError) {
       toast.error(`語音合成錯誤: ${openaiError}`);
     }
-  }, [openaiError]);
+  }, [isOpenAIProvider, openaiError]);
 
   // Sync voice setting
   useEffect(() => {
     setVoice(settings.ttsVoice);
   }, [settings.ttsVoice, setVoice]);
 
+  useEffect(() => {
+    setSpeed(settings.ttsSpeed);
+  }, [settings.ttsSpeed, setSpeed]);
+
+  useEffect(() => {
+    if (!webTtsSupported || !webVoices.length || settings.ttsProvider !== 'web') return;
+    const selected = pickWebVoice(webVoices, settings.ttsWebVoice, 'zh-TW');
+    if (selected) {
+      setWebVoice(selected);
+    }
+  }, [settings.ttsProvider, settings.ttsWebVoice, webTtsSupported, webVoices, setWebVoice]);
+
   const speakMessage = async (message: string) => {
-    if (settings.useNaturalVoice) {
+    if (isOpenAIProvider) {
       await openaiSpeak(message);
     } else if (webTtsSupported) {
       webSpeak(message);
+    } else {
+      toast.error('您的瀏覽器不支援語音播放');
     }
   };
 
@@ -312,9 +333,15 @@ export default function QueryPage() {
       {isSpeaking && (
         <div
           className="fixed bottom-20 right-4 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg flex items-center gap-2 cursor-pointer"
-          onClick={() => settings.useNaturalVoice && openaiStop()}
+          onClick={() => {
+            if (isOpenAIProvider) {
+              openaiStop();
+              return;
+            }
+            webCancel();
+          }}
         >
-          {openaiIsLoading ? (
+          {isRemoteLoading ? (
             <>
               <LoadingIcon className="h-4 w-4 animate-spin" />
               正在生成語音...

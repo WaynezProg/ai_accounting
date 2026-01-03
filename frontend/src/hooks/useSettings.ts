@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { TTSVoice } from '@/services/api';
 
+export type TTSProvider = 'web' | 'openai';
+
 export type AppSettings = {
-  useNaturalVoice: boolean; // 使用 OpenAI TTS（付費）vs Web Speech API（免費）
+  ttsProvider: TTSProvider;
+  ttsWebVoice: string; // SpeechSynthesisVoice.voiceURI
   ttsVoice: TTSVoice;
   ttsSpeed: number;
 };
@@ -10,7 +13,8 @@ export type AppSettings = {
 const SETTINGS_KEY = 'app_settings';
 
 const defaultSettings: AppSettings = {
-  useNaturalVoice: true, // 預設使用自然語音
+  ttsProvider: 'web', // 預設使用免費語音
+  ttsWebVoice: '',
   ttsVoice: 'nova',
   ttsSpeed: 1.0,
 };
@@ -20,7 +24,15 @@ export const useSettings = () => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
       if (stored) {
-        return { ...defaultSettings, ...JSON.parse(stored) };
+        const parsed = JSON.parse(stored) as Partial<AppSettings> & {
+          useNaturalVoice?: boolean;
+        };
+        const storedProvider = parsed.ttsProvider;
+        const ttsProvider: TTSProvider =
+          storedProvider === 'openai' || storedProvider === 'web'
+            ? storedProvider
+            : (parsed.useNaturalVoice ? 'openai' : 'web');
+        return { ...defaultSettings, ...parsed, ttsProvider };
       }
     } catch {
       // Ignore parse errors

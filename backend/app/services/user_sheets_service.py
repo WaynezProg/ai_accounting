@@ -437,11 +437,13 @@ class UserSheetsService:
                     total=0.0,
                     record_count=0,
                     by_category={},
+                    by_category_count={},
                 )
 
             # 計算統計
             total = 0.0
             by_category: Dict[str, float] = {}
+            by_category_count: Dict[str, int] = {}
 
             for record in records:
                 try:
@@ -450,6 +452,7 @@ class UserSheetsService:
 
                     category = record.get("類別", "其他")
                     by_category[category] = by_category.get(category, 0) + amount
+                    by_category_count[category] = by_category_count.get(category, 0) + 1
                 except (ValueError, TypeError):
                     continue
 
@@ -462,6 +465,7 @@ class UserSheetsService:
                 total=total,
                 record_count=len(records),
                 by_category=by_category,
+                by_category_count=by_category_count,
             )
 
         except Exception as e:

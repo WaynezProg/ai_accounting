@@ -7,6 +7,7 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
 import { useOpenAITTS } from '@/hooks/useOpenAITTS';
 import { useSettings } from '@/hooks/useSettings';
+import { pickWebVoice } from '@/utils/tts';
 import { createEntry, getAuthToken } from '@/services/api';
 import type { AccountingRecord } from '@/services/api';
 
@@ -76,8 +77,11 @@ export default function HomePage() {
   // Web Speech API TTS (free)
   const {
     speak: webSpeak,
+    cancel: webCancel,
     isSpeaking: webIsSpeaking,
     isSupported: webTtsSupported,
+    voices: webVoices,
+    setVoice: setWebVoice,
   } = useSpeechSynthesis('zh-TW');
 
   // OpenAI TTS (paid, natural voice)
@@ -88,10 +92,13 @@ export default function HomePage() {
     isLoading: openaiIsLoading,
     error: openaiError,
     setVoice,
+    setSpeed,
     isCached,
   } = useOpenAITTS(settings.ttsVoice);
 
-  const isSpeaking = settings.useNaturalVoice ? (openaiIsSpeaking || openaiIsLoading) : webIsSpeaking;
+  const isOpenAIProvider = settings.ttsProvider === 'openai';
+  const isSpeaking = isOpenAIProvider ? (openaiIsSpeaking || openaiIsLoading) : webIsSpeaking;
+  const isRemoteLoading = isOpenAIProvider ? openaiIsLoading : false;
 
   // Update input when transcript changes
   useEffect(() => {
@@ -109,21 +116,35 @@ export default function HomePage() {
 
   // Show OpenAI TTS errors
   useEffect(() => {
-    if (openaiError) {
+    if (isOpenAIProvider && openaiError) {
       toast.error(`語音合成錯誤: ${openaiError}`);
     }
-  }, [openaiError]);
+  }, [isOpenAIProvider, openaiError]);
 
   // Sync voice setting
   useEffect(() => {
     setVoice(settings.ttsVoice);
   }, [settings.ttsVoice, setVoice]);
 
+  useEffect(() => {
+    setSpeed(settings.ttsSpeed);
+  }, [settings.ttsSpeed, setSpeed]);
+
+  useEffect(() => {
+    if (!webTtsSupported || !webVoices.length || settings.ttsProvider !== 'web') return;
+    const selected = pickWebVoice(webVoices, settings.ttsWebVoice, 'zh-TW');
+    if (selected) {
+      setWebVoice(selected);
+    }
+  }, [settings.ttsProvider, settings.ttsWebVoice, webTtsSupported, webVoices, setWebVoice]);
+
   const speakMessage = async (message: string) => {
-    if (settings.useNaturalVoice) {
+    if (isOpenAIProvider) {
       await openaiSpeak(message);
     } else if (webTtsSupported) {
       webSpeak(message);
+    } else {
+      toast.error('您的瀏覽器不支援語音播放');
     }
   };
 
@@ -263,7 +284,7 @@ export default function HomePage() {
                     onClick={() => speakMessage(lastFeedback)}
                     disabled={isSpeaking}
                   >
-                    {openaiIsLoading ? (
+                    {isRemoteLoading ? (
                       <LoadingIcon className="h-4 w-4 animate-spin" />
                     ) : isSpeaking ? (
                       <SpeakerIcon className="h-4 w-4 text-primary" />
@@ -271,7 +292,11 @@ export default function HomePage() {
                       <PlayIcon className="h-4 w-4" />
                     )}
                     <span className="ml-1 text-xs">
-                      {openaiIsLoading ? '載入中' : isSpeaking ? '播放中' : (settings.useNaturalVoice && isCached(lastFeedback) ? '再聽一次' : '聆聽')}
+                      {isRemoteLoading
+                        ? '載入中'
+                        : isSpeaking
+                          ? '播放中'
+                          : ((isOpenAIProvider && isCached(lastFeedback)) || (isEdgeProvider && isEdgeCached(lastFeedback)) ? '再聽一次' : '聆聽')}
                     </span>
                   </Button>
                 </div>
@@ -287,13 +312,15 @@ export default function HomePage() {
         <div
           className="fixed bottom-20 right-4 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg flex items-center gap-2 cursor-pointer hover:bg-primary/90 transition-colors"
           onClick={() => {
-            if (settings.useNaturalVoice) {
+            if (isOpenAIProvider) {
               openaiStop();
+              return;
             }
+            webCancel();
           }}
           title="點擊停止播放"
         >
-          {openaiIsLoading ? (
+          {isRemoteLoading ? (
             <>
               <LoadingIcon className="h-4 w-4 animate-spin" />
               正在生成語音...

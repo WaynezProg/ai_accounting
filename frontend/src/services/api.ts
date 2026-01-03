@@ -182,12 +182,12 @@ export type TTSVoice = 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'fable' |
 
 export type TTSRequest = {
   text: string;
-  voice?: TTSVoice;
+  voice?: string;
   speed?: number;
 };
 
 export type VoiceInfo = {
-  id: TTSVoice;
+  id: string;
   name: string;
   description: string;
 };
@@ -195,7 +195,7 @@ export type VoiceInfo = {
 // TTS API functions
 export const synthesizeSpeech = async (
   text: string,
-  voice: TTSVoice = 'nova',
+  voice: string = 'nova',
   speed: number = 1.0
 ): Promise<Blob> => {
   const response = await api.post<Blob>(
@@ -217,6 +217,7 @@ export type MonthlyStats = {
   total: number;
   record_count: number;
   by_category: Record<string, number>;
+  by_category_count: Record<string, number>;
 };
 
 export type StatsResponse = {
@@ -268,7 +269,7 @@ export const getMonthlyStats = async (year?: number, month?: number): Promise<{ 
   const categories: CategoryStat[] = Object.entries(data.by_category).map(([category, total]) => ({
     category,
     total: total as number,
-    count: 0, // Backend doesn't provide count per category
+    count: data.by_category_count?.[category] ?? 0,
     percentage: data.total > 0 ? ((total as number) / data.total) * 100 : 0,
   }));
 
@@ -385,6 +386,14 @@ export const getMySheet = async (): Promise<SheetResponse> => {
 // Create a new sheet
 export const createSheet = async (title?: string): Promise<SheetResponse> => {
   const response = await api.post<SheetResponse>('/api/sheets/create', {
+    title: title || '語音記帳',
+  });
+  return response.data;
+};
+
+// Create a new sheet and replace existing binding
+export const createNewSheet = async (title?: string): Promise<SheetResponse> => {
+  const response = await api.post<SheetResponse>('/api/sheets/create-new', {
     title: title || '語音記帳',
   });
   return response.data;

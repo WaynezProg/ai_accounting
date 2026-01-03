@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useSettings } from '@/hooks/useSettings';
+import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
+import { filterWebVoices } from '@/utils/tts';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   setAuthToken,
@@ -15,9 +16,11 @@ import {
   getGoogleLoginUrl,
   getMySheet,
   createSheet,
+  createNewSheet,
   linkSheet,
   listDriveSheets,
   selectSheet,
+  synthesizeSpeech,
   listAPITokens,
   revokeAPIToken,
 } from '@/services/api';
@@ -82,6 +85,8 @@ const VOICE_OPTIONS: { id: TTSVoice; name: string; description: string }[] = [
   { id: 'ash', name: 'Ash', description: '中性，沉穩' },
 ];
 
+const SAMPLE_TTS_TEXT = '您好，這是語音試聽。';
+
 export default function SettingsPage() {
   const { user, isAuthenticated, authType, logout: authLogout, isLoading: authLoading } = useAuth();
   const [token, setToken] = useState<string>(getAuthToken() || '');
@@ -92,6 +97,7 @@ export default function SettingsPage() {
 
   // Sheet state
   const [sheetInfo, setSheetInfo] = useState<SheetInfo | null>(null);
+  const [hasExistingSheet, setHasExistingSheet] = useState(false);
   const [isLoadingSheet, setIsLoadingSheet] = useState(false);
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
   const [sheetUrlInput, setSheetUrlInput] = useState('');
@@ -108,6 +114,78 @@ export default function SettingsPage() {
   const [isLoadingTokens, setIsLoadingTokens] = useState(false);
 
   const { settings, updateSettings, resetSettings } = useSettings();
+  const { voices: webVoices, isSupported: webTtsSupported } = useSpeechSynthesis('zh-TW');
+  const availableWebVoices = filterWebVoices(webVoices);
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!webTtsSupported || availableWebVoices.length === 0) return;
+    const selected = availableWebVoices.find((voice) => voice.voiceURI === settings.ttsWebVoice);
+    if (!selected) {
+      updateSettings({ ttsWebVoice: availableWebVoices[0].voiceURI });
+    }
+  }, [availableWebVoices, settings.ttsWebVoice, updateSettings, webTtsSupported]);
+
+  const cleanupPreview = () => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsPreviewLoading(false);
+    setPreviewKey(null);
+  };
+
+  const handlePreviewRemote = async (voiceId: string) => {
+    if (!voiceId) return;
+    const key = `openai:${voiceId}`;
+    cleanupPreview();
+    setPreviewKey(key);
+    setIsPreviewLoading(true);
+    try {
+      const audioBlob = await synthesizeSpeech(SAMPLE_TTS_TEXT, voiceId, settings.ttsSpeed);
+      const audioUrl = URL.createObjectURL(audioBlob);
+      previewUrlRef.current = audioUrl;
+      const audio = new Audio(audioUrl);
+      previewAudioRef.current = audio;
+      audio.onplay = () => setIsPreviewLoading(false);
+      audio.onended = () => cleanupPreview();
+      audio.onerror = () => {
+        toast.error('試聽播放失敗');
+        cleanupPreview();
+      };
+      await audio.play();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '試聽失敗';
+      toast.error(message);
+      cleanupPreview();
+    }
+  };
+
+  const handlePreviewWebVoice = (voice: SpeechSynthesisVoice) => {
+    if (!webTtsSupported) {
+      toast.error('您的瀏覽器不支援語音播放');
+      return;
+    }
+    const key = `web:${voice.voiceURI}`;
+    cleanupPreview();
+    setPreviewKey(key);
+    const utterance = new SpeechSynthesisUtterance(SAMPLE_TTS_TEXT);
+    utterance.voice = voice;
+    utterance.rate = 1;
+    utterance.onend = () => cleanupPreview();
+    utterance.onerror = () => cleanupPreview();
+    window.speechSynthesis.speak(utterance);
+  };
 
   // 載入用戶的 Sheet 資訊
   useEffect(() => {
@@ -122,6 +200,7 @@ export default function SettingsPage() {
     try {
       const response = await getMySheet();
       setSheetInfo(response.sheet);
+      setHasExistingSheet(Boolean(response.sheet));
     } catch (error) {
       console.error('Failed to load sheet info:', error);
     } finally {
@@ -142,11 +221,16 @@ export default function SettingsPage() {
   };
 
   const handleCreateSheet = async () => {
+    if (hasExistingSheet) {
+      const confirmed = window.confirm('建立新 Sheet 會取代目前綁定，確定要繼續嗎？');
+      if (!confirmed) return;
+    }
     setIsCreatingSheet(true);
     try {
-      const response = await createSheet();
+      const response = hasExistingSheet ? await createNewSheet() : await createSheet();
       if (response.success && response.sheet) {
         setSheetInfo(response.sheet);
+        setHasExistingSheet(true);
         toast.success('Google Sheet 建立成功！');
       }
     } catch (error) {
@@ -690,60 +774,128 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Natural Voice Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="natural-voice">自然語音</Label>
-              <p className="text-xs text-muted-foreground">
-                使用 AI 自然語音（需消耗 API 額度，約 $0.015/千字）
-              </p>
+          <div className="space-y-3">
+            <Label>語音供應商</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={settings.ttsProvider === 'web' ? 'default' : 'outline'}
+                onClick={() => updateSettings({ ttsProvider: 'web' })}
+                className="h-auto py-2 px-3 flex-col items-start"
+              >
+                <span className="font-medium">免費語音</span>
+                <span className="text-xs opacity-70">Web Speech API</span>
+              </Button>
+              <Button
+                variant={settings.ttsProvider === 'openai' ? 'default' : 'outline'}
+                onClick={() => updateSettings({ ttsProvider: 'openai' })}
+                className="h-auto py-2 px-3 flex-col items-start"
+              >
+                <span className="font-medium">OpenAI 自然語音</span>
+                <span className="text-xs opacity-70">未來付費</span>
+              </Button>
             </div>
-            <Switch
-              id="natural-voice"
-              checked={settings.useNaturalVoice}
-              onCheckedChange={(checked) => updateSettings({ useNaturalVoice: checked })}
-            />
           </div>
 
-          {/* Voice Selection */}
-          {settings.useNaturalVoice && (
-            <div className="space-y-3">
-              <Label>語音選擇</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {VOICE_OPTIONS.map((voice) => (
-                  <Button
-                    key={voice.id}
-                    variant={settings.ttsVoice === voice.id ? 'default' : 'outline'}
-                    onClick={() => updateSettings({ ttsVoice: voice.id })}
-                    className="h-auto py-2 px-3 flex-col items-start"
-                  >
-                    <span className="font-medium">{voice.name}</span>
-                    <span className="text-xs opacity-70">{voice.description}</span>
-                  </Button>
-                ))}
+          {settings.ttsProvider === 'web' && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>語音選擇</Label>
+                {availableWebVoices.length > 0 ? (
+                  <div className="space-y-2 max-h-64 overflow-auto rounded-md border p-2">
+                    {availableWebVoices.map((voice) => {
+                      const isSelected = settings.ttsWebVoice === voice.voiceURI;
+                      const key = `web:${voice.voiceURI}`;
+                      return (
+                        <div
+                          key={voice.voiceURI}
+                          className={`flex items-center justify-between rounded-md border px-3 py-2 ${isSelected ? 'border-primary' : 'border-border'}`}
+                        >
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">{voice.name}</div>
+                            <div className="text-xs text-muted-foreground">{voice.lang}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePreviewWebVoice(voice)}
+                              disabled={!webTtsSupported || isPreviewLoading}
+                            >
+                              {previewKey === key ? '播放中' : '試聽'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={isSelected ? 'default' : 'outline'}
+                              onClick={() => updateSettings({ ttsWebVoice: voice.voiceURI })}
+                            >
+                              {isSelected ? '已選擇' : '選擇'}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    找不到 Tingting/Meijia 語音，請切換瀏覽器
+                  </p>
+                )}
               </div>
             </div>
           )}
 
-          {/* Speed Setting */}
-          {settings.useNaturalVoice && (
-            <div className="space-y-2">
-              <Label>語速：{settings.ttsSpeed.toFixed(1)}x</Label>
-              <input
-                type="range"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={settings.ttsSpeed}
-                onChange={(e) => updateSettings({ ttsSpeed: parseFloat(e.target.value) })}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>慢 (0.5x)</span>
-                <span>正常 (1.0x)</span>
-                <span>快 (2.0x)</span>
+          {settings.ttsProvider === 'openai' && (
+            <>
+              <div className="space-y-3">
+                <Label>語音選擇</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {VOICE_OPTIONS.map((voice) => {
+                    const key = `openai:${voice.id}`;
+                    return (
+                      <div
+                        key={voice.id}
+                        className={`flex items-center justify-between rounded-md border px-3 py-2 ${settings.ttsVoice === voice.id ? 'border-primary' : 'border-border'}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => updateSettings({ ttsVoice: voice.id })}
+                          className="flex-1 text-left"
+                        >
+                          <div className="font-medium">{voice.name}</div>
+                          <div className="text-xs opacity-70">{voice.description}</div>
+                        </button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handlePreviewRemote(voice.id)}
+                          disabled={isPreviewLoading}
+                        >
+                          {previewKey === key ? '播放中' : '試聽'}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+
+              <div className="space-y-2">
+                <Label>語速：{settings.ttsSpeed.toFixed(1)}x</Label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2"
+                  step="0.1"
+                  value={settings.ttsSpeed}
+                  onChange={(e) => updateSettings({ ttsSpeed: parseFloat(e.target.value) })}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>慢 (0.5x)</span>
+                  <span>正常 (1.0x)</span>
+                  <span>快 (2.0x)</span>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -74,6 +74,7 @@ class MonthlyStats(BaseModel):
     total: float = Field(..., description="總支出")
     record_count: int = Field(..., description="記錄筆數")
     by_category: Dict[str, float] = Field(..., description="各類別金額")
+    by_category_count: Dict[str, int] = Field(..., description="各類別筆數")
 
 
 class StatsResponse(BaseModel):
