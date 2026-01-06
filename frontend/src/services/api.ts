@@ -10,7 +10,21 @@ const api = axios.create({
 });
 
 // Token management - support both JWT (OAuth) and API Token
+const REFRESH_TOKEN_KEY = 'refresh_token';
+const AUTH_EXPIRES_AT_KEY = 'auth_expires_at';
+
 let authToken: string | null = localStorage.getItem('auth_token') || localStorage.getItem('api_token');
+let refreshToken: string | null = localStorage.getItem(REFRESH_TOKEN_KEY);
+let accessTokenExpiresAt: string | null = localStorage.getItem(AUTH_EXPIRES_AT_KEY);
+
+export const setAuthSession = (token: string, newRefreshToken: string, expiresAt: string) => {
+  authToken = token;
+  refreshToken = newRefreshToken;
+  accessTokenExpiresAt = expiresAt;
+  localStorage.setItem('auth_token', token);
+  localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
+  localStorage.setItem(AUTH_EXPIRES_AT_KEY, expiresAt);
+};
 
 export const setAuthToken = (token: string | null) => {
   authToken = token;
@@ -20,9 +34,15 @@ export const setAuthToken = (token: string | null) => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('api_token');
   }
+  refreshToken = null;
+  accessTokenExpiresAt = null;
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_EXPIRES_AT_KEY);
 };
 
 export const getAuthToken = () => authToken;
+export const getRefreshToken = () => refreshToken;
+export const getAccessTokenExpiry = () => accessTokenExpiresAt;
 
 // Check if user is authenticated
 export const isAuthenticated = () => !!authToken;
@@ -35,14 +55,83 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for auth errors
+// Flag to prevent multiple refresh attempts
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// Response interceptor for auth errors with auto-refresh
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      setAuthToken(null);
-      // Optionally redirect to login
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 and not already retrying, and not the refresh endpoint itself
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/api/auth/refresh')
+    ) {
+      // Check if we have a refresh token
+      if (refreshToken) {
+        if (isRefreshing) {
+          // Queue the request while refreshing
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          })
+            .then((token) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return api(originalRequest);
+            })
+            .catch((err) => Promise.reject(err));
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        try {
+          // Try to refresh the token
+          const response = await api.post<AuthSessionResponse>('/api/auth/refresh', {
+            refresh_token: refreshToken,
+          });
+
+          const newToken = response.data.access_token;
+          setAuthSession(
+            response.data.access_token,
+            response.data.refresh_token,
+            response.data.access_token_expires_at
+          );
+
+          processQueue(null, newToken);
+
+          // Retry the original request
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        } catch (refreshError) {
+          processQueue(refreshError, null);
+          // Refresh failed, clear tokens
+          setAuthToken(null);
+          return Promise.reject(refreshError);
+        } finally {
+          isRefreshing = false;
+        }
+      } else {
+        // No refresh token, clear auth
+        setAuthToken(null);
+      }
     }
     return Promise.reject(error);
   }
@@ -102,6 +191,17 @@ export type MeResponse = {
   user: UserInfo;
   auth_type: 'oauth' | 'api_token';
 };
+
+export type AuthSessionResponse = {
+  success: boolean;
+  access_token: string;
+  refresh_token: string;
+  access_token_expires_at: string;
+  token_type: string;
+  auth_type: string;
+};
+
+export type ExchangeCodeResponse = AuthSessionResponse;
 
 // Sheet types (Phase 5)
 export type SheetInfo = {
@@ -354,6 +454,34 @@ export const logout = async (): Promise<{ success: boolean; message: string }> =
   const response = await api.post<{ success: boolean; message: string }>('/api/auth/logout');
   // Clear local token
   setAuthToken(null);
+  return response.data;
+};
+
+export const refreshSession = async (overrideToken?: string): Promise<AuthSessionResponse> => {
+  const token = overrideToken || refreshToken;
+  if (!token) {
+    throw new Error('Missing refresh token');
+  }
+  const response = await api.post<AuthSessionResponse>('/api/auth/refresh', {
+    refresh_token: token,
+  });
+  setAuthSession(
+    response.data.access_token,
+    response.data.refresh_token,
+    response.data.access_token_expires_at
+  );
+  return response.data;
+};
+
+export const exchangeAuthCode = async (code: string): Promise<ExchangeCodeResponse> => {
+  const response = await api.post<ExchangeCodeResponse>('/api/auth/exchange', {
+    code,
+  });
+  setAuthSession(
+    response.data.access_token,
+    response.data.refresh_token,
+    response.data.access_token_expires_at
+  );
   return response.data;
 };
 

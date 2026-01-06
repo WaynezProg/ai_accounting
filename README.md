@@ -12,7 +12,7 @@
 - 🤖 **AI 智慧解析**：使用 GPT-4 自動解析記帳內容（日期、金額、類別）
 - 📊 **Google Sheets 儲存**：記帳資料自動寫入 Google Sheets
 - 💡 **理財回饋**：每次記帳後提供 AI 理財建議
-- 🔐 **多重認證**：Google OAuth 登入 + API Token 認證
+- 🔐 **多重認證**：Google OAuth（one-time code 交換）+ JWT Access/Refresh + API Token
 - 🗣️ **自然語音**：OpenAI TTS 自然語音回饋（可選）
 - 📈 **統計圖表**：圓餅圖視覺化支出分佈
 - 🔍 **智慧查詢**：自然語言查詢帳務狀況
@@ -104,9 +104,19 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 
 # JWT（用於 OAuth 登入）
 JWT_SECRET_KEY=your-secret-key
+JWT_ACCESS_EXPIRE_MINUTES=15
+JWT_REFRESH_EXPIRE_HOURS=168
+JWT_REFRESH_INACTIVITY_HOURS=48
+OAUTH_CODE_EXPIRE_MINUTES=5
 
 # 前端 URL
 FRONTEND_URL=http://localhost:5173
+```
+
+**生產環境額外設定：**
+```bash
+TURSO_DATABASE_URL=libsql://xxx
+TURSO_AUTH_TOKEN=xxx
 ```
 
 ### 分別啟動
@@ -134,7 +144,7 @@ npm run dev
 - **TTS**：OpenAI TTS API (`gpt-4o-mini-tts` 模型，11 種聲音)
 - **資料儲存**：Google Sheets (OAuth)
 - **資料庫**：SQLite (本地) / Turso libSQL (生產)
-- **認證**：JWT + API Token
+- **認證**：JWT Access/Refresh + API Token
 
 ### 前端
 - **框架**：React + TypeScript + Vite
@@ -173,6 +183,8 @@ npm run dev
 |------|------|:----:|------|
 | GET | `/api/auth/google/login` | ❌ | 導向 Google OAuth 登入 |
 | GET | `/api/auth/google/callback` | ❌ | OAuth 回調處理 |
+| POST | `/api/auth/exchange` | ❌ | 交換 OAuth one-time code |
+| POST | `/api/auth/refresh` | ❌ | 刷新 Access Token |
 | POST | `/api/auth/logout` | ✅ | 登出 |
 | GET | `/api/auth/me` | ✅ | 取得當前用戶資訊 |
 | GET | `/api/auth/status` | ❌ | 檢查認證狀態 |
@@ -180,6 +192,9 @@ npm run dev
 | GET | `/api/auth/token/list` | ✅ | 列出用戶的 API Token |
 | DELETE | `/api/auth/token/{id}` | ✅ | 撤銷 API Token |
 | GET | `/api/auth/token/verify` | ✅ | 驗證 Token |
+| GET | `/api/auth/settings/timezone` | ✅ | 取得用戶時區 |
+| PUT | `/api/auth/settings/timezone` | ✅ | 更新用戶時區 |
+| GET | `/api/auth/settings/timezones` | ❌ | 常用時區列表 |
 
 ### Sheet API
 
@@ -219,8 +234,9 @@ npm run dev
 1. 開啟網頁 http://localhost:5173
 2. 點擊「使用 Google 帳號登入」
 3. 授權應用程式存取 Google Sheets
-4. 在設定頁面建立專屬的 Google Sheet
-5. 開始記帳！
+4. OAuth 回調會產生 one-time code，由前端交換 Access/Refresh Token
+5. 在設定頁面建立專屬的 Google Sheet
+6. 開始記帳！
 
 ### Siri 捷徑
 
@@ -360,6 +376,53 @@ ai_accounting/
 - [ ] 多幣別支援
 - [ ] 週期性支出追蹤
 - [ ] 分享帳本功能
+
+---
+
+## English (Current)
+
+Voice accounting assistant that integrates Siri Shortcuts, LLM, and Google Sheets.
+
+### Key Features
+- Voice/typing accounting with AI parsing
+- Google Sheets storage per user
+- OAuth login with one-time code exchange
+- JWT access/refresh + API token support
+- Natural language query and TTS (optional)
+
+### Production
+- Frontend: https://frontend-omega-eight-30.vercel.app
+- Backend API: https://ai-accounting-api-51386650140.asia-east1.run.app
+- API Docs: https://ai-accounting-api-51386650140.asia-east1.run.app/docs
+
+### Quick Start
+```bash
+./start.sh
+```
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8000
+
+### Required Env
+```bash
+OPENAI_API_KEY=sk-xxx
+GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxx
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+JWT_SECRET_KEY=your-secret-key
+JWT_ACCESS_EXPIRE_MINUTES=15
+JWT_REFRESH_EXPIRE_HOURS=168
+JWT_REFRESH_INACTIVITY_HOURS=48
+OAUTH_CODE_EXPIRE_MINUTES=5
+FRONTEND_URL=http://localhost:5173
+```
+
+### Auth APIs
+- `POST /api/auth/exchange` (one-time code → tokens)
+- `POST /api/auth/refresh` (refresh access token)
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/auth/settings/timezone`
+- `PUT /api/auth/settings/timezone`
 
 ---
 

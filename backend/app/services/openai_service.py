@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any
 
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
@@ -202,17 +203,28 @@ class OpenAIService:
             logger.error(f"TTS error: {e}")
             raise OpenAIServiceError("TTS_ERROR", f"語音合成失敗：{str(e)}")
 
-    async def answer_query(self, query: str, stats: MonthlyStats) -> str:
+    async def answer_query(
+        self, query: str, stats: MonthlyStats, user_timezone: str = "Asia/Taipei"
+    ) -> str:
         """
         回答帳務查詢
 
         Args:
             query: 用戶的問題
             stats: 統計資料
+            user_timezone: 用戶時區（IANA 格式，如 "Asia/Taipei"）
 
         Returns:
             str: 回答內容
         """
+        try:
+            tz = ZoneInfo(user_timezone)
+        except Exception:
+            logger.warning(f"Invalid timezone: {user_timezone}, falling back to Asia/Taipei")
+            tz = ZoneInfo("Asia/Taipei")
+
+        current_time = datetime.now(tz)
+        current_time_text = f"{current_time.strftime('%Y-%m-%d %H:%M %z')} ({user_timezone})"
         messages = [
             {
                 "role": "system",
@@ -222,12 +234,15 @@ class OpenAIService:
                     - 使用自然語言
                     - 提供具體數字
                     - 可以給出簡短建議
+                    - 如果資料不足以回答日級別或是否有記帳的問題，請明確說明「資料不足」或「無法判斷」
                 """,
             },
             {
                 "role": "user",
                 "content": f"""
                     用戶問題：{query}
+                    目前時間戳（使用者本地時區）：{current_time_text}
+                    資料範圍：僅有月統計資料，無逐日記帳明細
                     統計資料：
                     - 月份：{stats.month}
                     - 總支出：{stats.total} 元

@@ -40,7 +40,13 @@ class Settings:
     # JWT
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-this-secret-key-in-production")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24 hours
+    JWT_ACCESS_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "15"))
+    JWT_REFRESH_EXPIRE_HOURS: int = int(os.getenv("JWT_REFRESH_EXPIRE_HOURS", "168"))  # 7 days
+    JWT_REFRESH_INACTIVITY_HOURS: int = int(os.getenv("JWT_REFRESH_INACTIVITY_HOURS", "48"))
+    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24 hours (legacy)
+
+    # OAuth one-time code
+    OAUTH_CODE_EXPIRE_MINUTES: int = int(os.getenv("OAUTH_CODE_EXPIRE_MINUTES", "5"))
 
     # Frontend URL (for OAuth redirect)
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")

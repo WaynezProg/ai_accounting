@@ -1,6 +1,9 @@
 """認證 API 端點"""
 
+import hashlib
 import logging
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -19,6 +22,14 @@ from app.database.crud import (
     get_user_api_tokens,
     revoke_api_token,
     get_user_by_id,
+    save_refresh_token,
+    get_refresh_token_by_hash,
+    revoke_refresh_token,
+    update_refresh_token_usage,
+    update_user_timezone,
+    create_oauth_login_code,
+    get_oauth_login_code_by_hash,
+    mark_oauth_login_code_used,
 )
 from app.services.oauth_service import oauth_service
 from app.services.jwt_service import jwt_service
@@ -54,6 +65,29 @@ class TokenResponse(BaseModel):
     created_at: str
     expires_at: Optional[str] = None
     message: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """Refresh Token 請求"""
+
+    refresh_token: str = Field(..., description="Refresh Token")
+
+
+class AuthSessionResponse(BaseModel):
+    """登入/刷新回應"""
+
+    success: bool = True
+    access_token: str
+    refresh_token: str
+    access_token_expires_at: str
+    token_type: str
+    auth_type: str
+
+
+class ExchangeCodeRequest(BaseModel):
+    """交換 one-time code 請求"""
+
+    code: str = Field(..., description="OAuth one-time code")
 
 
 class VerifyTokenResponse(BaseModel):
@@ -164,18 +198,25 @@ async def google_callback(
             scope=" ".join(settings.GOOGLE_OAUTH_SCOPES),
         )
 
-        # 6. 建立 JWT
-        jwt_token = jwt_service.create_access_token(
+        # 6. 建立 one-time code（交換用）
+        raw_code = secrets.token_urlsafe(32)
+        code_hash = hashlib.sha256(raw_code.encode()).hexdigest()
+        expires_at = datetime.utcnow() + timedelta(
+            minutes=settings.OAUTH_CODE_EXPIRE_MINUTES
+        )
+        create_oauth_login_code(
+            db,
             user_id=user.id,
-            email=user.email,
+            code_hash=code_hash,
+            expires_at=expires_at,
         )
 
-        # 7. 重導向至前端，帶上 JWT
+        # 7. 重導向至前端，帶上 one-time code
         params = {
-            "token": jwt_token,
+            "code": raw_code,
             "new_user": "1" if is_new else "0",
         }
-        redirect_url = f"{settings.FRONTEND_URL}/auth/callback?{urlencode(params)}"
+        redirect_url = f"{settings.FRONTEND_URL}/auth/callback#{urlencode(params)}"
 
         logger.info(f"OAuth success for user: {user.email}, new: {is_new}")
         return RedirectResponse(url=redirect_url)
@@ -190,6 +231,7 @@ async def google_callback(
 async def logout(
     response: Response,
     current_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     """
     登出端點
@@ -198,11 +240,128 @@ async def logout(
     """
     if current_user:
         logger.info(f"User logged out: {current_user.get('email')}")
+        user_id = current_user.get("user_id")
+        if user_id:
+            revoke_refresh_token(db, user_id)
 
     return {
         "success": True,
         "message": "已登出",
     }
+
+
+@router.post("/refresh", response_model=AuthSessionResponse)
+def refresh_session(
+    request: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    使用 Refresh Token 取得新的 Access Token
+    """
+    token_hash = jwt_service.hash_refresh_token(request.refresh_token)
+    token_record = get_refresh_token_by_hash(db, token_hash)
+
+    if not token_record or token_record.revoked_at:
+        raise HTTPException(status_code=401, detail="Refresh token 無效")
+
+    now = datetime.utcnow()
+
+    if token_record.expires_at and now >= token_record.expires_at:
+        token_record.revoked_at = now
+        db.commit()
+        raise HTTPException(status_code=401, detail="Refresh token 已過期")
+
+    last_used_at = token_record.last_used_at or token_record.issued_at
+    if now - last_used_at > timedelta(hours=settings.JWT_REFRESH_INACTIVITY_HOURS):
+        token_record.revoked_at = now
+        db.commit()
+        raise HTTPException(status_code=401, detail="Session 已過期，請重新登入")
+
+    # 更新 last_used_at 以重置 inactivity 計時器
+    update_refresh_token_usage(db, token_record)
+
+    user = get_user_by_id(db, token_record.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用戶不存在")
+
+    access_token, access_expires_at = jwt_service.create_access_token_with_expiry(
+        user_id=user.id,
+        email=user.email,
+    )
+
+    new_refresh_token = jwt_service.create_refresh_token()
+    new_refresh_hash = jwt_service.hash_refresh_token(new_refresh_token)
+    refresh_expires_at = None
+    if settings.JWT_REFRESH_EXPIRE_HOURS > 0:
+        refresh_expires_at = now + timedelta(hours=settings.JWT_REFRESH_EXPIRE_HOURS)
+
+    save_refresh_token(
+        db,
+        user_id=user.id,
+        token_hash=new_refresh_hash,
+        expires_at=refresh_expires_at,
+    )
+
+    return AuthSessionResponse(
+        success=True,
+        access_token=access_token,
+        refresh_token=new_refresh_token,
+        access_token_expires_at=access_expires_at.replace(tzinfo=timezone.utc).isoformat(),
+        token_type="Bearer",
+        auth_type="oauth",
+    )
+
+
+@router.post("/exchange", response_model=AuthSessionResponse)
+def exchange_oauth_code(
+    request: ExchangeCodeRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    使用 OAuth one-time code 交換 Access Token
+    """
+    code_hash = hashlib.sha256(request.code.encode()).hexdigest()
+    code_record = get_oauth_login_code_by_hash(db, code_hash)
+
+    if not code_record or code_record.used_at:
+        raise HTTPException(status_code=401, detail="交換碼無效")
+
+    now = datetime.utcnow()
+    if now >= code_record.expires_at:
+        raise HTTPException(status_code=401, detail="交換碼已過期")
+
+    mark_oauth_login_code_used(db, code_record)
+
+    user = get_user_by_id(db, code_record.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用戶不存在")
+
+    access_token, access_expires_at = jwt_service.create_access_token_with_expiry(
+        user_id=user.id,
+        email=user.email,
+    )
+
+    new_refresh_token = jwt_service.create_refresh_token()
+    new_refresh_hash = jwt_service.hash_refresh_token(new_refresh_token)
+    refresh_expires_at = None
+    if settings.JWT_REFRESH_EXPIRE_HOURS > 0:
+        refresh_expires_at = now + timedelta(hours=settings.JWT_REFRESH_EXPIRE_HOURS)
+
+    save_refresh_token(
+        db,
+        user_id=user.id,
+        token_hash=new_refresh_hash,
+        expires_at=refresh_expires_at,
+    )
+
+    return AuthSessionResponse(
+        success=True,
+        access_token=access_token,
+        refresh_token=new_refresh_token,
+        access_token_expires_at=access_expires_at.replace(tzinfo=timezone.utc).isoformat(),
+        token_type="Bearer",
+        auth_type="oauth",
+    )
 
 
 @router.get("/me", response_model=MeResponse)
@@ -402,3 +561,123 @@ async def get_auth_status(
             "auth_type": None,
             "user_id": None,
         }
+
+
+# =========================
+# 用戶設定端點
+# =========================
+
+
+class UpdateTimezoneRequest(BaseModel):
+    """更新時區請求"""
+
+    timezone: str = Field(
+        ...,
+        description="IANA 時區名稱，如 Asia/Taipei、America/New_York",
+        examples=["Asia/Taipei", "America/New_York", "Europe/London"],
+    )
+
+
+class TimezoneResponse(BaseModel):
+    """時區回應"""
+
+    success: bool = True
+    timezone: str
+    message: str
+
+
+# 常用時區列表
+COMMON_TIMEZONES = [
+    "Asia/Taipei",
+    "Asia/Tokyo",
+    "Asia/Shanghai",
+    "Asia/Hong_Kong",
+    "Asia/Singapore",
+    "America/New_York",
+    "America/Los_Angeles",
+    "America/Chicago",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+]
+
+
+@router.get("/settings/timezone", response_model=TimezoneResponse)
+def get_timezone(
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """
+    取得用戶的時區設定
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="需要登入")
+
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="無效的用戶")
+
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用戶不存在")
+
+    return TimezoneResponse(
+        success=True,
+        timezone=user.timezone or "Asia/Taipei",
+        message="取得成功",
+    )
+
+
+@router.put("/settings/timezone", response_model=TimezoneResponse)
+def update_timezone(
+    request: UpdateTimezoneRequest,
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """
+    更新用戶的時區設定
+
+    時區必須是有效的 IANA 時區名稱（如 Asia/Taipei、America/New_York）
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="需要登入")
+
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="無效的用戶")
+
+    # 驗證時區是否有效
+    from zoneinfo import ZoneInfo
+
+    try:
+        ZoneInfo(request.timezone)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail=f"無效的時區：{request.timezone}。請使用 IANA 時區名稱，如 Asia/Taipei",
+        )
+
+    user = update_user_timezone(db, user_id, request.timezone)
+    if not user:
+        raise HTTPException(status_code=404, detail="用戶不存在")
+
+    logger.info(f"Updated timezone for user {user_id}: {request.timezone}")
+
+    return TimezoneResponse(
+        success=True,
+        timezone=user.timezone,
+        message="時區更新成功",
+    )
+
+
+@router.get("/settings/timezones")
+def list_timezones():
+    """
+    取得常用時區列表
+    """
+    return {
+        "success": True,
+        "timezones": COMMON_TIMEZONES,
+    }

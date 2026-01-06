@@ -1,34 +1,72 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { exchangeAuthCode } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [message, setMessage] = useState('正在處理登入...');
 
+  const getFragmentParams = () => {
+    const hash = window.location.hash.replace(/^#/, '');
+    return new URLSearchParams(hash);
+  };
+
   useEffect(() => {
-    const token = searchParams.get('token');
-    const newUser = searchParams.get('new_user');
+    const fragmentParams = getFragmentParams();
+    const code = fragmentParams.get('code') ?? searchParams.get('code');
+    const newUser = fragmentParams.get('new_user') ?? searchParams.get('new_user');
 
-    if (token) {
-      // Save token and update auth state
-      login(token);
-      setStatus('success');
-      setMessage(newUser === '1' ? '歡迎加入！正在跳轉...' : '登入成功！正在跳轉...');
+    const clearCallbackUrl = () => {
+      window.history.replaceState({}, '', '/auth/callback');
+    };
 
-      // Redirect to home after a short delay
-      setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 1500);
-    } else {
+    if (!code) {
+      if (isLoading) {
+        return;
+      }
+      if (isAuthenticated) {
+        setStatus('success');
+        setMessage('已登入，正在跳轉...');
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 800);
+        return;
+      }
       setStatus('error');
       setMessage('登入失敗：未收到認證資訊');
+      return;
     }
-  }, [searchParams, login, navigate]);
+
+    clearCallbackUrl();
+
+    const exchange = async () => {
+      try {
+        const session = await exchangeAuthCode(code);
+        login(session.access_token, {
+          refreshToken: session.refresh_token,
+          expiresAt: session.access_token_expires_at,
+        });
+        setStatus('success');
+        setMessage(newUser === '1' ? '歡迎加入！正在跳轉...' : '登入成功！正在跳轉...');
+
+        // Redirect to home after a short delay
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 1500);
+      } catch (error) {
+        console.error('Exchange code failed:', error);
+        setStatus('error');
+        setMessage('登入失敗：交換認證失敗');
+      }
+    };
+
+    exchange();
+  }, [searchParams, login, navigate, isAuthenticated, isLoading]);
 
   return (
     <div className="flex items-center justify-center min-h-screen p-4">

@@ -9,7 +9,14 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database.models import User, GoogleToken, APIToken, UserSheet
+from app.database.models import (
+    User,
+    GoogleToken,
+    APIToken,
+    UserSheet,
+    RefreshToken,
+    OAuthLoginCode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,15 +64,31 @@ def update_user(
     user: User,
     name: Optional[str] = None,
     picture: Optional[str] = None,
+    timezone: Optional[str] = None,
 ) -> User:
     """更新用戶資料"""
     if name is not None:
         user.name = name
     if picture is not None:
         user.picture = picture
+    if timezone is not None:
+        user.timezone = timezone
     user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
+    return user
+
+
+def update_user_timezone(db: Session, user_id: str, timezone: str) -> Optional[User]:
+    """更新用戶時區設定"""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+    user.timezone = timezone
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    logger.info(f"Updated timezone for user {user_id}: {timezone}")
     return user
 
 
@@ -151,6 +174,125 @@ def is_google_token_expired(token: GoogleToken) -> bool:
 def hash_token(token: str) -> str:
     """將 Token 進行 SHA256 雜湊"""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+# =========================
+# RefreshToken CRUD
+# =========================
+
+
+def get_refresh_token_by_hash(db: Session, token_hash: str) -> Optional[RefreshToken]:
+    """根據 hash 取得 Refresh Token"""
+    result = db.execute(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+    )
+    return result.scalar_one_or_none()
+
+
+def get_refresh_token_by_user(db: Session, user_id: str) -> Optional[RefreshToken]:
+    """取得用戶的 Refresh Token"""
+    result = db.execute(
+        select(RefreshToken).where(RefreshToken.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def save_refresh_token(
+    db: Session,
+    user_id: str,
+    token_hash: str,
+    expires_at: Optional[datetime] = None,
+) -> RefreshToken:
+    """儲存或更新 Refresh Token（單一裝置）"""
+    now = datetime.utcnow()
+    token = get_refresh_token_by_user(db, user_id)
+
+    if token:
+        token.token_hash = token_hash
+        token.issued_at = now
+        token.last_used_at = now
+        token.expires_at = expires_at
+        token.revoked_at = None
+    else:
+        token = RefreshToken(
+            user_id=user_id,
+            token_hash=token_hash,
+            issued_at=now,
+            last_used_at=now,
+            expires_at=expires_at,
+            revoked_at=None,
+        )
+        db.add(token)
+
+    db.commit()
+    db.refresh(token)
+    return token
+
+
+def update_refresh_token_usage(
+    db: Session,
+    token: RefreshToken,
+) -> RefreshToken:
+    """更新 Refresh Token 使用時間"""
+    token.last_used_at = datetime.utcnow()
+    db.commit()
+    db.refresh(token)
+    return token
+
+
+def revoke_refresh_token(db: Session, user_id: str) -> bool:
+    """撤銷 Refresh Token"""
+    token = get_refresh_token_by_user(db, user_id)
+    if not token:
+        return False
+    token.revoked_at = datetime.utcnow()
+    db.commit()
+    return True
+
+
+# =========================
+# OAuth one-time code CRUD
+# =========================
+
+
+def create_oauth_login_code(
+    db: Session,
+    user_id: str,
+    code_hash: str,
+    expires_at: datetime,
+) -> OAuthLoginCode:
+    """建立 OAuth one-time code"""
+    code = OAuthLoginCode(
+        user_id=user_id,
+        code_hash=code_hash,
+        issued_at=datetime.utcnow(),
+        expires_at=expires_at,
+        used_at=None,
+    )
+    db.add(code)
+    db.commit()
+    db.refresh(code)
+    return code
+
+
+def get_oauth_login_code_by_hash(
+    db: Session, code_hash: str
+) -> Optional[OAuthLoginCode]:
+    """依 hash 取得 OAuth one-time code"""
+    result = db.execute(
+        select(OAuthLoginCode).where(OAuthLoginCode.code_hash == code_hash)
+    )
+    return result.scalar_one_or_none()
+
+
+def mark_oauth_login_code_used(
+    db: Session, code: OAuthLoginCode
+) -> OAuthLoginCode:
+    """標記 OAuth one-time code 已使用"""
+    code.used_at = datetime.utcnow()
+    db.commit()
+    db.refresh(code)
+    return code
 
 
 def generate_api_token() -> str:

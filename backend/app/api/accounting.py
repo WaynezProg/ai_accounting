@@ -12,6 +12,7 @@ from app.database.crud import (
     get_google_token,
     is_google_token_expired,
     save_google_token,
+    get_user_by_id,
 )
 from app.models.schemas import (
     AccountingRequest,
@@ -205,11 +206,19 @@ async def query_accounting(
     # 取得用戶的 Sheets 服務
     user_sheets_service, sheet_id = await get_sheets_service_for_user(current_user, db)
 
+    # 取得用戶時區設定
+    user_id = current_user.get("user_id")
+    user_timezone = "Asia/Taipei"  # 預設值
+    if user_id:
+        user = get_user_by_id(db, user_id)
+        if user and user.timezone:
+            user_timezone = user.timezone
+
     # 1. 取得統計資料
     stats = await user_sheets_service.get_monthly_stats(sheet_id)
 
-    # 2. 使用 LLM 回答問題
-    response = await openai_service.answer_query(request.query, stats)
+    # 2. 使用 LLM 回答問題（帶入用戶時區）
+    response = await openai_service.answer_query(request.query, stats, user_timezone)
 
     return QueryResponse(
         success=True,

@@ -17,6 +17,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     picture: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    timezone: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, default="Asia/Taipei"
+    )  # IANA timezone name (e.g., "Asia/Taipei", "America/New_York")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -29,6 +32,12 @@ class User(Base):
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     api_tokens: Mapped[list["APIToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    refresh_token: Mapped[Optional["RefreshToken"]] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    oauth_login_codes: Mapped[list["OAuthLoginCode"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     sheet: Mapped[Optional["UserSheet"]] = relationship(
@@ -79,6 +88,39 @@ class APIToken(Base):
 
     # 關聯
     user: Mapped[Optional["User"]] = relationship(back_populates="api_tokens")
+
+
+class RefreshToken(Base):
+    """JWT Refresh Token 資料表"""
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="refresh_token")
+
+
+class OAuthLoginCode(Base):
+    """OAuth 回調 one-time code 資料表"""
+    __tablename__ = "oauth_login_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="oauth_login_codes")
 
 
 class UserSheet(Base):
