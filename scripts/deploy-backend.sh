@@ -53,9 +53,9 @@ TURSO_DATABASE_URL=TURSO_DATABASE_URL:latest,\
 TURSO_AUTH_TOKEN=TURSO_AUTH_TOKEN:latest" \
     --set-env-vars "ENV=production,\
 PORT=8080,\
-GOOGLE_REDIRECT_URI=https://ai-accounting-api-51386650140.asia-east1.run.app/api/auth/google/callback,\
-FRONTEND_URL=https://ai-accounting.vercel.app,\
+FRONTEND_URL=https://frontend-omega-eight-30.vercel.app,\
 CORS_ORIGINS=https://ai-accounting.vercel.app,https://ai-accounting-waynezprog.vercel.app,https://frontend-omega-eight-30.vercel.app"
+# 注意: GOOGLE_REDIRECT_URI 已不再需要，redirect_uri 現在由 FRONTEND_URL + GOOGLE_OAUTH_CALLBACK_PATH 動態產生
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  部署完成!${NC}"

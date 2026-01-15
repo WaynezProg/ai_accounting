@@ -50,14 +50,7 @@ jobs:
         id: deploy
         run: |
           cd backend
-          SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE }} \
-            --region ${{ env.GCP_REGION }} \
-            --format 'value(status.url)' 2>/dev/null || true)
-          if [ -n "$SERVICE_URL" ]; then
-            GOOGLE_REDIRECT_URI="$SERVICE_URL/api/auth/google/callback"
-          else
-            GOOGLE_REDIRECT_URI="https://ai-accounting-api-51386650140.asia-east1.run.app/api/auth/google/callback"
-          fi
+          # GOOGLE_REDIRECT_URI 已不再需要，redirect_uri 現在由 FRONTEND_URL + GOOGLE_OAUTH_CALLBACK_PATH 動態產生
           gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
             --source . \
             --platform managed \
@@ -69,7 +62,7 @@ jobs:
             --min-instances 0 \
             --max-instances 10 \
             --set-secrets "OPENAI_API_KEY=OPENAI_API_KEY:latest,JWT_SECRET_KEY=JWT_SECRET_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,TURSO_DATABASE_URL=TURSO_DATABASE_URL:latest,TURSO_AUTH_TOKEN=TURSO_AUTH_TOKEN:latest" \
-            --set-env-vars "^@^ENV=production@GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}@FRONTEND_URL=https://frontend-omega-eight-30.vercel.app@CORS_ORIGINS=https://ai-accounting.vercel.app,https://ai-accounting-waynezprog.vercel.app,https://frontend-omega-eight-30.vercel.app"
+            --set-env-vars "^@^ENV=production@FRONTEND_URL=https://frontend-omega-eight-30.vercel.app@CORS_ORIGINS=https://ai-accounting.vercel.app,https://ai-accounting-waynezprog.vercel.app,https://frontend-omega-eight-30.vercel.app"
           gcloud run services update-traffic ${{ env.CLOUD_RUN_SERVICE }} \
             --region ${{ env.GCP_REGION }} \
             --to-latest

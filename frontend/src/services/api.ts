@@ -203,6 +203,12 @@ export type AuthSessionResponse = {
 
 export type ExchangeCodeResponse = AuthSessionResponse;
 
+export type ExchangeGoogleCodeResponse = {
+  success: boolean;
+  code: string;
+  new_user: boolean;
+};
+
 // Sheet types (Phase 5)
 export type SheetInfo = {
   sheet_id: string;
@@ -482,6 +488,15 @@ export const exchangeAuthCode = async (code: string): Promise<ExchangeCodeRespon
     response.data.refresh_token,
     response.data.access_token_expires_at
   );
+  return response.data;
+};
+
+// Exchange Google authorization code for one-time code
+export const exchangeGoogleCode = async (code: string, state: string): Promise<ExchangeGoogleCodeResponse> => {
+  const response = await api.post<ExchangeGoogleCodeResponse>('/api/auth/google/exchange-code', {
+    code,
+    state,
+  });
   return response.data;
 };
 

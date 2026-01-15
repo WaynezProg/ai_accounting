@@ -26,8 +26,10 @@ class Settings:
     # Google OAuth
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GOOGLE_REDIRECT_URI: str = os.getenv(
-        "GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback"
+    # GOOGLE_REDIRECT_URI 已棄用，改為動態產生：FRONTEND_URL + GOOGLE_OAUTH_CALLBACK_PATH
+    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "")  # deprecated
+    GOOGLE_OAUTH_CALLBACK_PATH: str = os.getenv(
+        "GOOGLE_OAUTH_CALLBACK_PATH", "/auth/google/callback"
     )
     GOOGLE_OAUTH_SCOPES: list = [
         "openid",
@@ -38,12 +40,20 @@ class Settings:
     ]
 
     # JWT
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-this-secret-key-in-production")
+    JWT_SECRET_KEY: str = os.getenv(
+        "JWT_SECRET_KEY", "change-this-secret-key-in-production"
+    )
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_ACCESS_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "15"))
-    JWT_REFRESH_EXPIRE_HOURS: int = int(os.getenv("JWT_REFRESH_EXPIRE_HOURS", "168"))  # 7 days
-    JWT_REFRESH_INACTIVITY_HOURS: int = int(os.getenv("JWT_REFRESH_INACTIVITY_HOURS", "48"))
-    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24 hours (legacy)
+    JWT_REFRESH_EXPIRE_HOURS: int = int(
+        os.getenv("JWT_REFRESH_EXPIRE_HOURS", "168")
+    )  # 7 days
+    JWT_REFRESH_INACTIVITY_HOURS: int = int(
+        os.getenv("JWT_REFRESH_INACTIVITY_HOURS", "48")
+    )
+    JWT_EXPIRE_MINUTES: int = int(
+        os.getenv("JWT_EXPIRE_MINUTES", "1440")
+    )  # 24 hours (legacy)
 
     # OAuth one-time code
     OAUTH_CODE_EXPIRE_MINUTES: int = int(os.getenv("OAUTH_CODE_EXPIRE_MINUTES", "5"))

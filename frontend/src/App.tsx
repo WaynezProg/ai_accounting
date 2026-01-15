@@ -7,6 +7,7 @@ import StatsPage from '@/pages/StatsPage';
 import QueryPage from '@/pages/QueryPage';
 import SettingsPage from '@/pages/SettingsPage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
+import GoogleCallbackPage from '@/pages/GoogleCallbackPage';
 import AuthErrorPage from '@/pages/AuthErrorPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import TermsPage from '@/pages/TermsPage';
@@ -19,6 +20,7 @@ function App() {
         <Routes>
           {/* OAuth callback routes (outside main layout) */}
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
           <Route path="/auth/error" element={<AuthErrorPage />} />
 
           {/* Legal pages (outside main layout) */}

@@ -100,7 +100,8 @@ OPENAI_API_KEY=sk-xxx
 # Google OAuth（必填，用於用戶登入和存取 Sheets）
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
-GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+# OAuth 回調路徑（redirect_uri = FRONTEND_URL + GOOGLE_OAUTH_CALLBACK_PATH）
+GOOGLE_OAUTH_CALLBACK_PATH=/auth/google/callback
 
 # JWT（用於 OAuth 登入）
 JWT_SECRET_KEY=your-secret-key
@@ -407,7 +408,7 @@ Voice accounting assistant that integrates Siri Shortcuts, LLM, and Google Sheet
 OPENAI_API_KEY=sk-xxx
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
-GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+GOOGLE_OAUTH_CALLBACK_PATH=/auth/google/callback
 JWT_SECRET_KEY=your-secret-key
 JWT_ACCESS_EXPIRE_MINUTES=15
 JWT_REFRESH_EXPIRE_HOURS=168
@@ -417,6 +418,7 @@ FRONTEND_URL=http://localhost:5173
 ```
 
 ### Auth APIs
+- `POST /api/auth/google/exchange-code` (Google auth code → one-time code)
 - `POST /api/auth/exchange` (one-time code → tokens)
 - `POST /api/auth/refresh` (refresh access token)
 - `POST /api/auth/logout`

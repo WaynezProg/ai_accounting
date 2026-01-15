@@ -20,8 +20,8 @@
 
 - [x] 建立 OAuth 2.0 憑證（Web Application 類型）
 - [x] 設定授權重新導向 URI
-  - 開發：`http://localhost:8000/api/auth/google/callback`
-  - 生產：`https://your-domain/api/auth/google/callback`
+  - 開發：`http://localhost:5173/auth/google/callback`
+  - 生產：`https://frontend-omega-eight-30.vercel.app/auth/google/callback`
 - [x] 設定 OAuth 同意畫面
 - [x] OAuth 授權範圍：
   - `openid` - OpenID Connect
@@ -74,13 +74,19 @@
   - 產生 OAuth URL（含 state 參數）
   - 重導向至 Google 登入
 
-- [x] `GET /api/auth/google/callback`
+- [x] `POST /api/auth/google/exchange-code`
+  - 接收前端轉發的 Google 授權碼
   - 驗證 state 參數
   - 交換 Authorization Code 為 Token
   - 取得用戶資訊
   - 建立/更新用戶資料
   - 儲存 Google Token
-  - 重導向至前端（帶 JWT Token）
+  - 回傳 one-time code
+
+- [x] `GET /api/auth/google/callback`（舊版，保留相容性）
+  - 驗證 state 參數
+  - 交換 Authorization Code 為 Token
+  - 重導向至前端（帶 one-time code）
 
 - [x] `POST /api/auth/logout`
   - 清除本地 Token
@@ -125,7 +131,10 @@
 ### 5.6 前端 OAuth 整合 ✅
 
 - [x] 登入按鈕（導向 `/api/auth/google/login`）
-- [x] 處理 OAuth 回調（從 URL 取得 Token）
+- [x] 處理 OAuth 回調
+  - `/auth/google/callback` 接收 Google 重導向
+  - 呼叫 `POST /api/auth/google/exchange-code` 交換授權碼
+  - 使用 one-time code 取得 JWT
 - [x] Token 儲存至 localStorage
 - [x] 認證狀態管理
 - [x] 登出功能
@@ -166,12 +175,16 @@
 # Google OAuth 2.0
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
-GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+# OAuth 回調路徑（redirect_uri = FRONTEND_URL + GOOGLE_OAUTH_CALLBACK_PATH）
+GOOGLE_OAUTH_CALLBACK_PATH=/auth/google/callback
 
 # JWT
 JWT_SECRET_KEY=random-secret-for-jwt
 JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=60
+
+# 前端 URL（用於產生 OAuth redirect_uri）
+FRONTEND_URL=http://localhost:5173
 
 # 資料庫
 DATABASE_URL=sqlite+aiosqlite:///./data/app.db

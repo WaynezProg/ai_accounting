@@ -26,8 +26,19 @@ class OAuthService:
     def __init__(self):
         self.client_id = settings.GOOGLE_CLIENT_ID
         self.client_secret = settings.GOOGLE_CLIENT_SECRET
-        self.redirect_uri = settings.GOOGLE_REDIRECT_URI
         self.scopes = settings.GOOGLE_OAUTH_SCOPES
+
+    @property
+    def redirect_uri(self) -> str:
+        """
+        動態產生 redirect_uri
+
+        優先使用 FRONTEND_URL + GOOGLE_OAUTH_CALLBACK_PATH，
+        若 GOOGLE_REDIRECT_URI 有設定則使用舊設定（相容性）
+        """
+        if settings.GOOGLE_REDIRECT_URI:
+            return settings.GOOGLE_REDIRECT_URI
+        return f"{settings.FRONTEND_URL}{settings.GOOGLE_OAUTH_CALLBACK_PATH}"
 
     def generate_state(self) -> str:
         """產生 CSRF state 參數"""
@@ -52,6 +63,7 @@ class OAuthService:
             "access_type": "offline",  # 取得 refresh_token
             "prompt": "consent",  # 強制顯示同意畫面以取得 refresh_token
         }
+        logger.info(f"OAuth redirect_uri: {self.redirect_uri}")
         return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
     async def exchange_code_for_tokens(
@@ -91,9 +103,7 @@ class OAuthService:
             logger.info("Successfully exchanged code for tokens")
             return access_token, refresh_token, expires_at
 
-    async def refresh_access_token(
-        self, refresh_token: str
-    ) -> Tuple[str, datetime]:
+    async def refresh_access_token(self, refresh_token: str) -> Tuple[str, datetime]:
         """
         使用 Refresh Token 取得新的 Access Token
 

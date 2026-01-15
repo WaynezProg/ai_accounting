@@ -129,7 +129,7 @@ frontend/src/
 OPENAI_API_KEY=sk-xxx
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxx
-GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+GOOGLE_OAUTH_CALLBACK_PATH=/auth/google/callback
 JWT_SECRET_KEY=<strong-random-key>
 FRONTEND_URL=http://localhost:5173
 CORS_ORIGINS=http://localhost:5173
