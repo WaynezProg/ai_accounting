@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { exchangeGoogleCode, exchangeAuthCode } from '@/services/api';
@@ -10,9 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
  * 處理 Google OAuth 重導向回來的 callback。
  * 流程：
  * 1. 從 URL 取得 Google 授權碼 (code) 和 state
- * 2. 呼叫後端 /api/auth/google/exchange-code 交換 one-time code
- * 3. 用 one-time code 呼叫 /api/auth/exchange 取得 JWT
- * 4. 完成登入，跳轉至首頁
+ * 2. 前端驗證 state 與 sessionStorage 中的值一致（CSRF 防護）
+ * 3. 呼叫後端 /api/auth/google/exchange-code 交換 one-time code
+ * 4. 用 one-time code 呼叫 /api/auth/exchange 取得 JWT
+ * 5. 完成登入，跳轉至首頁
  */
 export default function GoogleCallbackPage() {
   const [searchParams] = useSearchParams();
@@ -20,10 +21,19 @@ export default function GoogleCallbackPage() {
   const { login } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [message, setMessage] = useState('正在處理 Google 登入...');
+  
+  // 使用 useRef 防止 React Strict Mode 下重複執行
+  const hasProcessed = useRef(false);
 
   useEffect(() => {
+    // 防止重複執行（React Strict Mode 會執行兩次）
+    if (hasProcessed.current) {
+      return;
+    }
+    hasProcessed.current = true;
+
     const code = searchParams.get('code');
-    const state = searchParams.get('state');
+    const urlState = searchParams.get('state');
     const error = searchParams.get('error');
 
     // 清除 URL 中的敏感參數
@@ -40,20 +50,33 @@ export default function GoogleCallbackPage() {
     }
 
     // 檢查必要參數
-    if (!code || !state) {
+    if (!code || !urlState) {
       clearCallbackUrl();
       setStatus('error');
       setMessage('登入失敗：缺少必要的認證參數');
       return;
     }
 
+    // 前端驗證 state（CSRF 防護）
+    const storedState = sessionStorage.getItem('oauth_state');
+    if (urlState !== storedState) {
+      clearCallbackUrl();
+      sessionStorage.removeItem('oauth_state');
+      setStatus('error');
+      setMessage('登入失敗：安全驗證失敗，請重新登入');
+      console.error('OAuth state mismatch:', { urlState, storedState });
+      return;
+    }
+
+    // 驗證成功，清除 sessionStorage 中的 state
+    sessionStorage.removeItem('oauth_state');
     clearCallbackUrl();
 
     const handleGoogleCallback = async () => {
       try {
-        // Step 1: 交換 Google 授權碼為 one-time code
+        // Step 1: 交換 Google 授權碼為 one-time code（不再傳送 state，後端不驗證）
         setMessage('正在驗證 Google 授權...');
-        const googleResponse = await exchangeGoogleCode(code, state);
+        const googleResponse = await exchangeGoogleCode(code);
 
         // Step 2: 用 one-time code 交換 JWT
         setMessage('正在建立登入狀態...');
@@ -78,11 +101,7 @@ export default function GoogleCallbackPage() {
 
         // 處理不同類型的錯誤
         if (error instanceof Error) {
-          if (error.message.includes('Invalid state')) {
-            setMessage('登入失敗：安全驗證失敗，請重新登入');
-          } else {
-            setMessage(`登入失敗：${error.message}`);
-          }
+          setMessage(`登入失敗：${error.message}`);
         } else {
           setMessage('登入失敗：發生未知錯誤');
         }

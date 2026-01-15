@@ -38,8 +38,8 @@ from app.utils.auth import verify_token, get_current_user_optional
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 暫存 OAuth state（生產環境應使用 Redis）
-oauth_states: dict[str, bool] = {}
+# OAuth state 已改由前端管理（存在 sessionStorage）
+# 不再需要後端暫存，避免多實例和 cold start 問題
 
 
 # =========================
@@ -94,7 +94,7 @@ class ExchangeGoogleCodeRequest(BaseModel):
     """交換 Google 授權碼請求"""
 
     code: str = Field(..., description="Google 授權碼 (authorization code)")
-    state: str = Field(..., description="CSRF state 參數")
+    # state 驗證已移至前端 sessionStorage，後端不再驗證
 
 
 class ExchangeGoogleCodeResponse(BaseModel):
@@ -154,15 +154,15 @@ class APITokenListResponse(BaseModel):
 
 
 @router.get("/google/login")
-async def google_login():
+async def google_login(
+    state: str = Query(..., description="前端生成的 CSRF state 參數"),
+):
     """
     開始 Google OAuth 登入流程
 
-    重導向至 Google 授權頁面
+    重導向至 Google 授權頁面。
+    state 參數由前端生成並存在 sessionStorage，用於 CSRF 防護。
     """
-    state = oauth_service.generate_state()
-    oauth_states[state] = True  # 記錄有效 state
-
     auth_url = oauth_service.get_authorization_url(state)
     logger.info(f"Redirecting to Google OAuth, state: {state[:8]}...")
     return RedirectResponse(url=auth_url)
@@ -171,7 +171,7 @@ async def google_login():
 @router.get("/google/callback")
 async def google_callback(
     code: str = Query(..., description="Google 授權碼"),
-    state: str = Query(..., description="CSRF state 參數"),
+    state: str = Query(None, description="CSRF state 參數（已移至前端驗證）"),
     db: Session = Depends(get_db),
 ):
     """
@@ -179,12 +179,13 @@ async def google_callback(
 
     處理 Google 授權後的回調，建立用戶並發放 JWT。
     新流程建議使用 POST /api/auth/google/exchange-code。
+    注意：state 驗證已移至前端 sessionStorage。
     """
-    # 1. 驗證 state
-    if state not in oauth_states:
-        logger.warning(f"Invalid OAuth state: {state[:8]}...")
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
-    del oauth_states[state]
+    # state 驗證已移至前端，後端不再驗證
+    if state:
+        logger.info(
+            f"Google callback received state: {state[:8]}... (validation moved to frontend)"
+        )
 
     try:
         # 2. 交換授權碼為 Token
@@ -258,16 +259,13 @@ async def exchange_google_code(
 
     流程：
     1. 前端接收 Google callback（含 code 和 state）
-    2. 前端呼叫此端點，傳送 code 和 state
-    3. 後端驗證 state，向 Google 交換 token
-    4. 後端建立用戶資料，產生 one-time code
-    5. 前端用 one-time code 呼叫 /api/auth/exchange 取得 JWT
+    2. 前端驗證 state 與 sessionStorage 一致（CSRF 防護）
+    3. 前端呼叫此端點，傳送 code
+    4. 後端向 Google 交換 token，建立用戶資料
+    5. 後端產生 one-time code
+    6. 前端用 one-time code 呼叫 /api/auth/exchange 取得 JWT
     """
-    # 1. 驗證 state
-    if request.state not in oauth_states:
-        logger.warning(f"Invalid OAuth state: {request.state[:8]}...")
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
-    del oauth_states[request.state]
+    # state 驗證已移至前端 sessionStorage，後端不再驗證
 
     try:
         # 2. 交換授權碼為 Token

@@ -439,8 +439,14 @@ export const verifyToken = async (): Promise<{ success: boolean; message: string
 // ========================================
 
 // Get Google OAuth login URL
+// 生成 state 並儲存到 sessionStorage，用於 CSRF 防護
 export const getGoogleLoginUrl = (): string => {
-  return `${API_BASE_URL}/api/auth/google/login`;
+  // 生成隨機 state
+  const state = crypto.randomUUID();
+  // 儲存到 sessionStorage，供 callback 時驗證
+  sessionStorage.setItem('oauth_state', state);
+  
+  return `${API_BASE_URL}/api/auth/google/login?state=${encodeURIComponent(state)}`;
 };
 
 // Get current user info
@@ -492,10 +498,10 @@ export const exchangeAuthCode = async (code: string): Promise<ExchangeCodeRespon
 };
 
 // Exchange Google authorization code for one-time code
-export const exchangeGoogleCode = async (code: string, state: string): Promise<ExchangeGoogleCodeResponse> => {
+// state 驗證已移至前端 sessionStorage，後端不再驗證
+export const exchangeGoogleCode = async (code: string): Promise<ExchangeGoogleCodeResponse> => {
   const response = await api.post<ExchangeGoogleCodeResponse>('/api/auth/google/exchange-code', {
     code,
-    state,
   });
   return response.data;
 };
