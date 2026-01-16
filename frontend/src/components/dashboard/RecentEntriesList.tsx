@@ -25,7 +25,8 @@ function formatDate(dateStr: string): string {
   if (isYesterday) {
     return `昨天 ${date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
   }
-  return date.toLocaleDateString('zh-TW', {
+  // Use toLocaleString() instead of toLocaleDateString() to include time formatting
+  return date.toLocaleString('zh-TW', {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
