@@ -8,15 +8,30 @@
 
 ## 功能特色
 
+### 核心功能
 - 🎙️ **語音記帳**：透過 Siri 捷徑或網頁語音輸入記帳
 - 🤖 **AI 智慧解析**：使用 GPT-4 自動解析記帳內容（日期、金額、類別）
 - 📊 **Google Sheets 儲存**：記帳資料自動寫入 Google Sheets
 - 💡 **理財回饋**：每次記帳後提供 AI 理財建議
+- 👤 **個人專屬 Sheet**：每個用戶擁有獨立的 Google Sheet
+
+### Dashboard 首頁
+- 📈 **本月消費摘要**：即時顯示本月總支出、前三大消費類別及佔比
+- ⚡ **快速記帳按鈕**：一鍵記帳常用項目（早餐、午餐、晚餐、交通、咖啡）
+- 📋 **最近記帳列表**：顯示最近 5 筆記帳紀錄
+- 💰 **預算進度條**：設定月預算、追蹤使用進度、超支警示
+- 📉 **消費趨勢圖**：近 7 天每日消費趨勢迷你圖
+
+### 智慧查詢
+- 🔍 **多模式查詢**：帳務統計、財經知識問答、日常閒聊智慧分流
+- 📚 **財經知識庫**：回答儲蓄、投資、信用卡、稅務、保險等基礎問題
+- 📊 **跨月趨勢分析**：比較不同月份消費變化
+- 💬 **查詢記錄**：對話式 UI 呈現歷史查詢，支援搜尋與分頁
+
+### 認證與安全
 - 🔐 **多重認證**：Google OAuth（one-time code 交換）+ JWT Access/Refresh + API Token
 - 🗣️ **自然語音**：OpenAI TTS 自然語音回饋（可選）
 - 📈 **統計圖表**：圓餅圖視覺化支出分佈
-- 🔍 **智慧查詢**：自然語言查詢帳務狀況
-- 👤 **個人專屬 Sheet**：每個用戶擁有獨立的 Google Sheet
 
 ---
 
@@ -168,9 +183,9 @@ npm run dev
 
 | 路徑 | 頁面 | 功能 |
 |------|------|------|
-| `/` | 記帳首頁 | 語音/文字記帳輸入、記帳結果顯示 |
+| `/` | Dashboard 首頁 | 語音/文字記帳、快速記帳按鈕、本月摘要、預算進度、消費趨勢、最近記錄 |
 | `/stats` | 統計頁面 | 月度支出統計、圓餅圖、類別明細 |
-| `/query` | 查詢頁面 | 自然語言帳務查詢、語音回覆 |
+| `/query` | 查詢頁面 | 智慧查詢（帳務/財經/閒聊）、查詢記錄、搜尋歷史 |
 | `/settings` | 設定頁面 | 帳戶管理、Sheet 設定、Token 管理、語音設定 |
 | `/auth/callback` | OAuth 回調 | Google 登入後的回調處理 |
 
@@ -196,13 +211,18 @@ npm run dev
 | GET | `/api/auth/settings/timezone` | ✅ | 取得用戶時區 |
 | PUT | `/api/auth/settings/timezone` | ✅ | 更新用戶時區 |
 | GET | `/api/auth/settings/timezones` | ❌ | 常用時區列表 |
+| GET | `/api/auth/settings/budget` | ✅ | 取得用戶月預算設定 |
+| PUT | `/api/auth/settings/budget` | ✅ | 更新用戶月預算設定 |
 
 ### Sheet API
 
 | 方法 | 路徑 | 認證 | 說明 |
 |------|------|:----:|------|
 | GET | `/api/sheets/my-sheet` | ✅ | 取得用戶的 Sheet 資訊 |
-| POST | `/api/sheets/create` | ✅ | 建立新的 Sheet |
+| GET | `/api/sheets/list` | ✅ | 列出 Google Drive 中的 Sheets |
+| POST | `/api/sheets/select` | ✅ | 選擇現有的 Sheet |
+| POST | `/api/sheets/create` | ✅ | 建立新的 Sheet（舊版，保留相容）|
+| POST | `/api/sheets/create-new` | ✅ | 建立新的專屬 Sheet |
 | POST | `/api/sheets/link` | ✅ | 連結現有的 Sheet |
 
 ### 記帳 API
@@ -211,7 +231,9 @@ npm run dev
 |------|------|:----:|------|
 | POST | `/api/accounting/record` | ✅ | 記帳 |
 | GET | `/api/accounting/stats` | ✅ | 月度統計 |
-| POST | `/api/accounting/query` | ✅ | 自然語言查詢 |
+| POST | `/api/accounting/query` | ✅ | 智慧查詢（帳務/財經/閒聊）|
+| GET | `/api/accounting/query/history` | ✅ | 查詢歷史（支援搜尋與分頁）|
+| GET | `/api/accounting/summary` | ✅ | Dashboard 摘要（本月消費、趨勢、預算）|
 | GET | `/api/accounting/categories` | ❌ | 類別清單 |
 
 ### 其他 API
