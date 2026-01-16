@@ -23,7 +23,9 @@ class AccountingRecord(BaseModel):
     類別: str = Field(..., description="消費類別", example="飲食")
     花費: float = Field(..., description="金額", example=120.0)
     幣別: str = Field(default="TWD", description="貨幣類型", example="TWD")
-    支付方式: Optional[str] = Field(default=None, description="支付方式", example="現金")
+    支付方式: Optional[str] = Field(
+        default=None, description="支付方式", example="現金"
+    )
 
 
 class AccountingResponse(BaseModel):
@@ -51,6 +53,33 @@ class QueryResponse(BaseModel):
 
     success: bool = True
     response: str
+
+
+# =========================
+# 查詢記錄相關
+# =========================
+
+
+class QueryHistoryItem(BaseModel):
+    """查詢記錄項目"""
+
+    id: int
+    query: str = Field(..., description="使用者的問題")
+    answer: str = Field(..., description="AI 的回答")
+    created_at: str = Field(..., description="查詢時間 (ISO 8601)")
+
+
+class QueryHistoryResponse(BaseModel):
+    """查詢記錄回應"""
+
+    success: bool = True
+    items: list[QueryHistoryItem] = Field(
+        default_factory=list, description="查詢記錄列表"
+    )
+    next_cursor: Optional[str] = Field(
+        default=None, description="下一頁游標 (ISO 8601 時間戳)"
+    )
+    total: int = Field(..., description="符合條件的總筆數")
 
 
 # =========================

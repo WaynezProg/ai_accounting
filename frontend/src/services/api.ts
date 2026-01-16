@@ -405,6 +405,43 @@ export const queryAccounting = async (query: string): Promise<{ success: boolean
   };
 };
 
+// ========================================
+// Query History API
+// ========================================
+
+export type QueryHistoryItem = {
+  id: number;
+  query: string;
+  answer: string;
+  created_at: string;
+};
+
+export type QueryHistoryResponse = {
+  success: boolean;
+  items: QueryHistoryItem[];
+  next_cursor: string | null;
+  total: number;
+};
+
+export type GetQueryHistoryParams = {
+  limit?: number;
+  cursor?: string;
+  search?: string;
+};
+
+export const getQueryHistory = async (params: GetQueryHistoryParams = {}): Promise<QueryHistoryResponse> => {
+  const searchParams = new URLSearchParams();
+  if (params.limit) searchParams.append('limit', params.limit.toString());
+  if (params.cursor) searchParams.append('cursor', params.cursor);
+  if (params.search) searchParams.append('search', params.search);
+
+  const queryString = searchParams.toString();
+  const url = `/api/accounting/query/history${queryString ? `?${queryString}` : ''}`;
+  
+  const response = await api.get<QueryHistoryResponse>(url);
+  return response.data;
+};
+
 // Token management API
 export type TokenInfo = {
   token: string;

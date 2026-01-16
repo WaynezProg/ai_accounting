@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,7 +9,8 @@ import { useOpenAITTS } from '@/hooks/useOpenAITTS';
 import { useSettings } from '@/hooks/useSettings';
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
 import { pickWebVoice } from '@/utils/tts';
-import { queryAccounting, getAuthToken } from '@/services/api';
+import { queryAccounting, getAuthToken, getQueryHistory } from '@/services/api';
+import type { QueryHistoryItem } from '@/services/api';
 
 // Icon components
 function MicrophoneIcon({ className }: { className?: string }) {
@@ -25,6 +27,15 @@ function StopIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
       <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
+
+function SendIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
     </svg>
   );
 }
@@ -56,29 +67,122 @@ function LoadingIcon({ className }: { className?: string }) {
   );
 }
 
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+function HistoryIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </svg>
+  );
+}
+
 const EXAMPLE_QUERIES = [
-  // 帳務統計
   '這個月花了多少錢？',
-  // 明細查詢
   '最近買了什麼？',
-  // 趨勢分析
   '跟上個月比如何？',
-  // 預算規劃
   '幫我規劃預算',
-  // 財經知識
   '什麼是 ETF？',
 ];
 
-type QueryHistory = {
-  query: string;
-  answer: string;
-  timestamp: Date;
-};
+// 對話氣泡元件
+function ChatBubble({
+  isUser,
+  message,
+  timestamp,
+  onSpeak,
+  isSpeaking,
+}: {
+  isUser: boolean;
+  message: string;
+  timestamp: string;
+  onSpeak?: () => void;
+  isSpeaking?: boolean;
+}) {
+  const formattedTime = new Date(timestamp).toLocaleString('zh-TW', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className={`max-w-[85%] ${isUser ? 'order-1' : 'order-1'}`}>
+        <div
+          className={`rounded-2xl px-4 py-3 ${
+            isUser
+              ? 'bg-primary text-primary-foreground rounded-br-md'
+              : 'bg-muted rounded-bl-md'
+          }`}
+        >
+          {isUser ? (
+            <p className="text-sm whitespace-pre-wrap break-words">{message}</p>
+          ) : (
+            <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-base prose-strong:text-inherit">
+              <ReactMarkdown>{message}</ReactMarkdown>
+            </div>
+          )}
+        </div>
+        <div className={`flex items-center gap-2 mt-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
+          <span className="text-xs text-muted-foreground">{formattedTime}</span>
+          {!isUser && onSpeak && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={onSpeak}
+              disabled={isSpeaking}
+            >
+              <SpeakerIcon className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 骨架屏元件
+function ChatSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i}>
+          <div className="flex justify-end mb-4">
+            <div className="bg-muted rounded-2xl rounded-br-md h-10 w-48" />
+          </div>
+          <div className="flex justify-start mb-4">
+            <div className="bg-muted rounded-2xl rounded-bl-md h-24 w-64" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function QueryPage() {
   const [queryText, setQueryText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [history, setHistory] = useState<QueryHistory[]>([]);
+  
+  // 歷史記錄狀態
+  const [history, setHistory] = useState<QueryHistoryItem[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  
+  // 搜尋狀態
+  const [searchText, setSearchText] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   const { settings } = useSettings();
 
@@ -116,6 +220,40 @@ export default function QueryPage() {
   const isOpenAIProvider = settings.ttsProvider === 'openai';
   const isSpeaking = isOpenAIProvider ? (openaiIsSpeaking || openaiIsLoading) : webIsSpeaking;
   const isRemoteLoading = isOpenAIProvider ? openaiIsLoading : false;
+
+  // 載入歷史記錄
+  const loadHistory = useCallback(async (search?: string, cursor?: string) => {
+    if (!getAuthToken()) return;
+
+    try {
+      setIsLoadingHistory(true);
+      const response = await getQueryHistory({
+        limit: 20,
+        cursor,
+        search: search || undefined,
+      });
+
+      if (cursor) {
+        // 載入更多
+        setHistory((prev) => [...prev, ...response.items]);
+      } else {
+        // 初次載入或搜尋
+        setHistory(response.items);
+      }
+      setNextCursor(response.next_cursor);
+      setTotalCount(response.total);
+    } catch (error) {
+      console.error('Failed to load history:', error);
+      // 不顯示錯誤提示，避免干擾使用者
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  // 初次載入
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
   // Update input when transcript changes
   useEffect(() => {
@@ -185,12 +323,15 @@ export default function QueryPage() {
     try {
       const response = await queryAccounting(query);
       if (response.success) {
-        const newHistory: QueryHistory = {
+        // 新增到本地記錄最前面（後端已自動儲存）
+        const newItem: QueryHistoryItem = {
+          id: Date.now(), // 臨時 ID
           query: query,
           answer: response.answer,
-          timestamp: new Date(),
+          created_at: new Date().toISOString(),
         };
-        setHistory([newHistory, ...history]);
+        setHistory((prev) => [newItem, ...prev]);
+        setTotalCount((prev) => prev + 1);
         setQueryText('');
         resetTranscript();
 
@@ -218,8 +359,27 @@ export default function QueryPage() {
     setQueryText(example);
   };
 
+  // 搜尋處理
+  const handleSearch = () => {
+    setIsSearching(!!searchText);
+    loadHistory(searchText);
+  };
+
+  const handleClearSearch = () => {
+    setSearchText('');
+    setIsSearching(false);
+    loadHistory();
+  };
+
+  // 載入更多
+  const handleLoadMore = () => {
+    if (nextCursor) {
+      loadHistory(isSearching ? searchText : undefined, nextCursor);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Query Input */}
       <Card>
         <CardHeader className="pb-3">
@@ -256,7 +416,7 @@ export default function QueryPage() {
               onClick={() => handleQuery()}
               disabled={isLoading || !queryText.trim()}
             >
-              <SearchIcon className="h-4 w-4" />
+              <SendIcon className="h-4 w-4" />
             </Button>
           </div>
 
@@ -291,39 +451,6 @@ export default function QueryPage() {
         </CardContent>
       </Card>
 
-      {/* Query History */}
-      {history.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">查詢記錄</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {history.map((item, index) => (
-              <div key={index} className="border-b last:border-0 pb-4 last:pb-0">
-                <div className="text-sm text-muted-foreground mb-1">
-                  Q: {item.query}
-                </div>
-                <div className="text-sm bg-muted rounded-lg p-3 flex items-start gap-2">
-                  <div className="flex-1">{item.answer}</div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={() => speakMessage(item.answer)}
-                    disabled={isSpeaking}
-                  >
-                    <SpeakerIcon className="h-3 w-3" />
-                  </Button>
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {item.timestamp.toLocaleTimeString()}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Loading State */}
       {isLoading && (
         <Card>
@@ -333,6 +460,98 @@ export default function QueryPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Query History */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <HistoryIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle className="text-lg">查詢記錄</CardTitle>
+              {totalCount > 0 && (
+                <span className="text-sm text-muted-foreground">({totalCount})</span>
+              )}
+            </div>
+          </div>
+          {/* 搜尋框 */}
+          <div className="flex gap-2 mt-3">
+            <div className="relative flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="搜尋歷史記錄..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                className="pl-9 pr-8"
+              />
+              {searchText && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                  onClick={handleClearSearch}
+                >
+                  <XIcon className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            <Button variant="outline" size="icon" onClick={handleSearch}>
+              <SearchIcon className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoadingHistory && history.length === 0 ? (
+            <ChatSkeleton />
+          ) : history.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              {isSearching ? '找不到符合的記錄' : '尚無查詢記錄，試著問我問題吧！'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {/* 對話氣泡列表 */}
+              {history.map((item) => (
+                <div key={item.id}>
+                  {/* 使用者問題 */}
+                  <ChatBubble
+                    isUser={true}
+                    message={item.query}
+                    timestamp={item.created_at}
+                  />
+                  {/* AI 回答 */}
+                  <ChatBubble
+                    isUser={false}
+                    message={item.answer}
+                    timestamp={item.created_at}
+                    onSpeak={() => speakMessage(item.answer)}
+                    isSpeaking={isSpeaking}
+                  />
+                </div>
+              ))}
+
+              {/* 載入更多按鈕 */}
+              {nextCursor && (
+                <div className="pt-4 text-center">
+                  <Button
+                    variant="outline"
+                    onClick={handleLoadMore}
+                    disabled={isLoadingHistory}
+                  >
+                    {isLoadingHistory ? (
+                      <>
+                        <LoadingIcon className="h-4 w-4 animate-spin mr-2" />
+                        載入中...
+                      </>
+                    ) : (
+                      '載入更多'
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Speaking Indicator */}
       {isSpeaking && (

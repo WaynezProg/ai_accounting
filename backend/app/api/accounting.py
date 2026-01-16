@@ -14,6 +14,9 @@ from app.database.crud import (
     is_google_token_expired,
     save_google_token,
     get_user_by_id,
+    create_query_history,
+    get_query_history,
+    get_query_history_count,
 )
 from app.models.schemas import (
     AccountingRequest,
@@ -21,6 +24,8 @@ from app.models.schemas import (
     QueryRequest,
     QueryResponse,
     StatsResponse,
+    QueryHistoryResponse,
+    QueryHistoryItem,
 )
 from app.services.openai_service import openai_service
 from app.services.user_sheets_service import create_user_sheets_service
@@ -252,9 +257,81 @@ async def query_accounting(
         multi_month_stats=multi_month_stats,
     )
 
+    # 5. 儲存查詢記錄到資料庫
+    if user_id:
+        try:
+            create_query_history(db, user_id, request.query, response)
+            logger.info(f"Query history saved for user {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to save query history: {e}")
+
     return QueryResponse(
         success=True,
         response=response,
+    )
+
+
+@router.get("/query/history", response_model=QueryHistoryResponse)
+async def get_query_history_endpoint(
+    limit: int = Query(20, ge=1, le=100, description="每頁筆數"),
+    cursor: Optional[str] = Query(None, description="分頁游標 (ISO 8601 時間戳)"),
+    search: Optional[str] = Query(None, description="搜尋關鍵字"),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """
+    取得查詢記錄
+
+    支援 cursor-based 分頁和搜尋功能
+
+    需要在 Authorization header 提供 Bearer Token（JWT 或已綁定用戶的 API Token）
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="需要認證")
+
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="此 API Token 未綁定用戶帳號。請先登入網頁版產生新的 Token。",
+        )
+
+    logger.info(
+        f"Getting query history for user {user_id}, search={search}, cursor={cursor}"
+    )
+
+    # 解析 cursor 時間戳
+    cursor_dt = None
+    if cursor:
+        try:
+            cursor_dt = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="無效的 cursor 格式")
+
+    # 取得查詢記錄
+    records, next_cursor = get_query_history(
+        db, user_id, limit=limit, cursor=cursor_dt, search=search
+    )
+
+    # 取得總筆數
+    total = get_query_history_count(db, user_id, search=search)
+
+    # 轉換為回應格式
+    items = [
+        QueryHistoryItem(
+            id=record.id,
+            query=record.query,
+            answer=record.answer,
+            created_at=record.created_at.isoformat(),
+        )
+        for record in records
+    ]
+
+    return QueryHistoryResponse(
+        success=True,
+        items=items,
+        next_cursor=next_cursor.isoformat() if next_cursor else None,
+        total=total,
     )
 
 
