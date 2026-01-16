@@ -512,8 +512,8 @@ def get_query_history(
     # 判斷是否有下一頁
     next_cursor = None
     if len(records) > limit:
+        next_cursor = records[limit].created_at  # 下一頁從第 limit+1 筆開始
         records = records[:limit]  # 只回傳 limit 筆
-        next_cursor = records[-1].created_at  # 下一頁的游標
 
     return records, next_cursor
 

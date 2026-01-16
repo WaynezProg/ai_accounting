@@ -153,7 +153,7 @@ export function BudgetProgressBar({
 
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{percentage.toFixed(0)}% 已使用</span>
-          {budget.remaining !== null && (
+          {budget.remaining !== null && !Number.isNaN(budget.remaining) && (
             <span className={isOverBudget ? 'text-destructive' : ''}>
               {isOverBudget
                 ? `超支 $${Math.abs(budget.remaining).toLocaleString()}`
