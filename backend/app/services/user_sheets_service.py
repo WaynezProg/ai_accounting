@@ -637,8 +637,16 @@ class UserSheetsService:
                 except Exception:
                     continue
 
-            # 按時間倒序排列
-            all_records.sort(key=lambda x: x.get("時間", ""), reverse=True)
+            # 按時間倒序排列（使用 datetime 解析確保正確排序）
+            def parse_time_for_sort(record: Dict) -> datetime:
+                time_str = record.get("時間", "")
+                try:
+                    return datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+                except (ValueError, TypeError):
+                    # 如果解析失敗，返回最小時間（排在最後）
+                    return datetime.min
+
+            all_records.sort(key=parse_time_for_sort, reverse=True)
 
             # 回傳前 N 筆
             recent = all_records[:limit]

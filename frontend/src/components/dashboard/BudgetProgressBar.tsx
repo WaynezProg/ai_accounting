@@ -128,7 +128,7 @@ export function BudgetProgressBar({
           variant="ghost"
           className="h-7 text-xs"
           onClick={() => {
-            setBudgetInput(budget.monthly_limit.toString());
+            setBudgetInput(String(budget.monthly_limit ?? ''));
             setIsEditing(true);
           }}
         >
