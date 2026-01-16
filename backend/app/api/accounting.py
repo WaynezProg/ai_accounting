@@ -243,10 +243,11 @@ async def query_accounting(
     now_in_user_tz = datetime.now(tz)
 
     # 2. 取得近期消費明細（最近 7 天，基於用戶時區）
+    # 使用 days-1 確保範圍正確：今天 + 前 6 天 = 7 天
     recent_records = None
     try:
         today = now_in_user_tz.strftime("%Y-%m-%d")
-        week_ago = (now_in_user_tz - timedelta(days=7)).strftime("%Y-%m-%d")
+        week_ago = (now_in_user_tz - timedelta(days=6)).strftime("%Y-%m-%d")
         recent_records = await user_sheets_service.get_records_by_date_range(
             sheet_id, week_ago, today
         )
