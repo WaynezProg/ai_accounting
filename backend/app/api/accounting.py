@@ -17,6 +17,7 @@ from app.database.crud import (
     create_query_history,
     get_query_history,
     get_query_history_count,
+    get_user_budget,
 )
 from app.models.schemas import (
     AccountingRequest,
@@ -26,6 +27,13 @@ from app.models.schemas import (
     StatsResponse,
     QueryHistoryResponse,
     QueryHistoryItem,
+    DashboardSummaryResponse,
+    DashboardSummary,
+    MonthSummary,
+    CategorySummary,
+    RecentRecord,
+    DailyTrend,
+    BudgetStatus,
 )
 from app.services.openai_service import openai_service
 from app.services.user_sheets_service import create_user_sheets_service
@@ -333,6 +341,96 @@ async def get_query_history_endpoint(
         next_cursor=next_cursor.isoformat() if next_cursor else None,
         total=total,
     )
+
+
+@router.get("/summary", response_model=DashboardSummaryResponse)
+async def get_dashboard_summary(
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """
+    取得 Dashboard 摘要資料
+
+    一次回傳：
+    - 本月消費摘要（總金額、筆數、前三大類別）
+    - 最近 5 筆記帳記錄
+    - 過去 7 天每日消費趨勢
+    - 預算狀態
+
+    需要在 Authorization header 提供 Bearer Token（JWT 或已綁定用戶的 API Token）
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="需要認證")
+
+    logger.info("Getting dashboard summary")
+
+    # 取得用戶的 Sheets 服務
+    user_sheets_service, sheet_id = await get_sheets_service_for_user(current_user, db)
+    user_id = current_user.get("user_id")
+
+    # 1. 取得本月統計
+    stats = await user_sheets_service.get_monthly_stats(sheet_id)
+
+    # 計算前三大類別
+    top_categories = []
+    if stats.by_category:
+        sorted_categories = sorted(
+            stats.by_category.items(), key=lambda x: x[1], reverse=True
+        )[:3]
+        for category, amount in sorted_categories:
+            percentage = (amount / stats.total * 100) if stats.total > 0 else 0
+            top_categories.append(
+                CategorySummary(
+                    category=category, total=amount, percentage=round(percentage, 1)
+                )
+            )
+
+    month_summary = MonthSummary(
+        total=stats.total,
+        record_count=stats.record_count,
+        top_categories=top_categories,
+    )
+
+    # 2. 取得最近記帳記錄
+    recent_records_raw = await user_sheets_service.get_recent_records(sheet_id, limit=5)
+    recent_records = [
+        RecentRecord(
+            時間=r.get("時間", ""),
+            名稱=r.get("名稱", ""),
+            類別=r.get("類別", ""),
+            花費=float(r.get("花費", 0)),
+        )
+        for r in recent_records_raw
+    ]
+
+    # 3. 取得每日消費趨勢
+    daily_trend_raw = await user_sheets_service.get_daily_trend(sheet_id, days=7)
+    daily_trend = [
+        DailyTrend(date=d["date"], total=d["total"]) for d in daily_trend_raw
+    ]
+
+    # 4. 取得預算狀態
+    monthly_limit = get_user_budget(db, user_id) if user_id else None
+    budget = BudgetStatus(
+        monthly_limit=monthly_limit,
+        spent=stats.total,
+        remaining=(monthly_limit - stats.total) if monthly_limit else None,
+        percentage=(
+            round(stats.total / monthly_limit * 100, 1) if monthly_limit else None
+        ),
+    )
+
+    # 組合回傳
+    dashboard = DashboardSummary(
+        month_summary=month_summary,
+        recent_records=recent_records,
+        daily_trend=daily_trend,
+        budget=budget,
+    )
+
+    logger.info(f"Dashboard summary: total={stats.total}, records={stats.record_count}")
+
+    return DashboardSummaryResponse(success=True, data=dashboard)
 
 
 @router.get("/categories")

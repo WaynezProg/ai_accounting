@@ -1,15 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  MonthSummaryCard,
+  BudgetProgressBar,
+  QuickEntryButtons,
+  RecentEntriesList,
+  TrendSparkline,
+} from '@/components/dashboard';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
 import { useOpenAITTS } from '@/hooks/useOpenAITTS';
 import { useSettings } from '@/hooks/useSettings';
 import { pickWebVoice } from '@/utils/tts';
-import { createEntry, getAuthToken } from '@/services/api';
-import type { AccountingRecord } from '@/services/api';
+import {
+  createEntry,
+  getAuthToken,
+  getDashboardSummary,
+  setUserBudget,
+  isAuthenticated,
+} from '@/services/api';
+import type { AccountingRecord, DashboardSummary } from '@/services/api';
 
 // Icon components
 function MicrophoneIcon({ className }: { className?: string }) {
@@ -62,6 +75,10 @@ export default function HomePage() {
   const [lastResult, setLastResult] = useState<AccountingRecord | null>(null);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
 
+  // Dashboard state
+  const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+
   const { settings } = useSettings();
 
   const {
@@ -99,6 +116,28 @@ export default function HomePage() {
   const isOpenAIProvider = settings.ttsProvider === 'openai';
   const isSpeaking = isOpenAIProvider ? (openaiIsSpeaking || openaiIsLoading) : webIsSpeaking;
   const isRemoteLoading = isOpenAIProvider ? openaiIsLoading : false;
+
+  // Fetch dashboard data
+  const fetchDashboard = useCallback(async () => {
+    if (!isAuthenticated()) return;
+    
+    setIsDashboardLoading(true);
+    try {
+      const response = await getDashboardSummary();
+      if (response.success) {
+        setDashboardData(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard:', error);
+    } finally {
+      setIsDashboardLoading(false);
+    }
+  }, []);
+
+  // Load dashboard on mount and when authenticated
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
 
   // Update input when transcript changes
   useEffect(() => {
@@ -175,6 +214,9 @@ export default function HomePage() {
         // Clear input
         setInputText('');
         resetTranscript();
+
+        // Refresh dashboard data
+        fetchDashboard();
       } else {
         toast.error(response.message);
       }
@@ -183,6 +225,44 @@ export default function HomePage() {
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleQuickEntry = async (text: string) => {
+    if (!getAuthToken()) {
+      toast.error('請先在設定頁面設定 API Token');
+      return;
+    }
+
+    try {
+      const response = await createEntry(text);
+      if (response.success) {
+        setLastResult(response.record);
+        setLastFeedback(response.feedback);
+        toast.success(response.message);
+
+        // Refresh dashboard data
+        fetchDashboard();
+      } else {
+        toast.error(response.message);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '記帳失敗';
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleSetBudget = async (amount: number | null) => {
+    try {
+      const response = await setUserBudget(amount);
+      if (response.success) {
+        toast.success(response.message);
+        // Refresh dashboard data to get updated budget
+        fetchDashboard();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '設定預算失敗';
+      toast.error(errorMessage);
     }
   };
 
@@ -195,8 +275,10 @@ export default function HomePage() {
     }
   };
 
+  const showDashboard = isAuthenticated();
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Voice Input */}
       <Card>
         <CardHeader className="pb-3">
@@ -249,6 +331,45 @@ export default function HomePage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Quick Entry Buttons - Only show when authenticated */}
+      {showDashboard && (
+        <QuickEntryButtons
+          onSubmit={handleQuickEntry}
+          isLoading={isLoading}
+        />
+      )}
+
+      {/* Dashboard Summary Cards - Only show when authenticated */}
+      {showDashboard && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <MonthSummaryCard
+            summary={dashboardData?.month_summary ?? null}
+            isLoading={isDashboardLoading}
+          />
+          <BudgetProgressBar
+            budget={dashboardData?.budget ?? null}
+            isLoading={isDashboardLoading}
+            onSetBudget={handleSetBudget}
+          />
+        </div>
+      )}
+
+      {/* Trend Sparkline - Only show when authenticated */}
+      {showDashboard && (
+        <TrendSparkline
+          data={dashboardData?.daily_trend ?? []}
+          isLoading={isDashboardLoading}
+        />
+      )}
+
+      {/* Recent Entries - Only show when authenticated */}
+      {showDashboard && (
+        <RecentEntriesList
+          records={dashboardData?.recent_records ?? []}
+          isLoading={isDashboardLoading}
+        />
+      )}
 
       {/* Result Display */}
       {lastResult && (

@@ -608,4 +608,93 @@ export const selectSheet = async (sheetId: string, sheetName?: string): Promise<
   return response.data;
 };
 
+// ========================================
+// Dashboard API (enhance-homepage-dashboard)
+// ========================================
+
+export type CategorySummary = {
+  category: string;
+  total: number;
+  percentage: number;
+};
+
+export type MonthSummary = {
+  total: number;
+  record_count: number;
+  top_categories: CategorySummary[];
+};
+
+export type RecentRecord = {
+  時間: string;
+  名稱: string;
+  類別: string;
+  花費: number;
+};
+
+export type DailyTrend = {
+  date: string;
+  total: number;
+};
+
+export type BudgetStatus = {
+  monthly_limit: number | null;
+  spent: number;
+  remaining: number | null;
+  percentage: number | null;
+};
+
+export type DashboardSummary = {
+  month_summary: MonthSummary;
+  recent_records: RecentRecord[];
+  daily_trend: DailyTrend[];
+  budget: BudgetStatus;
+};
+
+export type DashboardSummaryResponse = {
+  success: boolean;
+  data: DashboardSummary;
+};
+
+export type BudgetResponse = {
+  success: boolean;
+  monthly_budget: number | null;
+  message: string;
+};
+
+// Get dashboard summary (month stats, recent records, daily trend, budget)
+export const getDashboardSummary = async (): Promise<DashboardSummaryResponse> => {
+  const response = await api.get<DashboardSummaryResponse>('/api/accounting/summary');
+  return response.data;
+};
+
+// Get user budget setting
+export const getUserBudget = async (): Promise<BudgetResponse> => {
+  const response = await api.get<BudgetResponse>('/api/auth/settings/budget');
+  return response.data;
+};
+
+// Set user budget (pass null to clear budget)
+export const setUserBudget = async (monthlyBudget: number | null): Promise<BudgetResponse> => {
+  const response = await api.put<BudgetResponse>('/api/auth/settings/budget', {
+    monthly_budget: monthlyBudget,
+  });
+  return response.data;
+};
+
+// Quick entry presets for fast accounting
+export type QuickEntryPreset = {
+  name: string;
+  category: string;
+  defaultAmount: number;
+  icon: string;
+};
+
+export const QUICK_ENTRY_PRESETS: QuickEntryPreset[] = [
+  { name: '早餐', category: '飲食', defaultAmount: 50, icon: '🌅' },
+  { name: '午餐', category: '飲食', defaultAmount: 100, icon: '🍱' },
+  { name: '晚餐', category: '飲食', defaultAmount: 150, icon: '🍽️' },
+  { name: '交通', category: '交通', defaultAmount: 30, icon: '🚌' },
+  { name: '咖啡', category: '飲食', defaultAmount: 80, icon: '☕' },
+];
+
 export default api;

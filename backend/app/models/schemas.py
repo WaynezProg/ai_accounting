@@ -1,6 +1,6 @@
 """Pydantic 資料模型"""
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
 
@@ -111,6 +111,86 @@ class StatsResponse(BaseModel):
 
     success: bool = True
     data: MonthlyStats
+
+
+# =========================
+# Dashboard Summary 相關
+# =========================
+
+
+class CategorySummary(BaseModel):
+    """類別摘要"""
+
+    category: str
+    total: float
+    percentage: float
+
+
+class MonthSummary(BaseModel):
+    """本月消費摘要"""
+
+    total: float = Field(default=0, description="本月總支出")
+    record_count: int = Field(default=0, description="記錄筆數")
+    top_categories: List[CategorySummary] = Field(
+        default_factory=list, description="前三大類別"
+    )
+
+
+class RecentRecord(BaseModel):
+    """最近記帳記錄"""
+
+    時間: str
+    名稱: str
+    類別: str
+    花費: float
+
+
+class DailyTrend(BaseModel):
+    """每日消費趨勢"""
+
+    date: str
+    total: float
+
+
+class BudgetStatus(BaseModel):
+    """預算狀態"""
+
+    monthly_limit: Optional[int] = Field(default=None, description="月預算上限")
+    spent: float = Field(default=0, description="已花費金額")
+    remaining: Optional[float] = Field(default=None, description="剩餘金額")
+    percentage: Optional[float] = Field(default=None, description="使用百分比")
+
+
+class DashboardSummary(BaseModel):
+    """Dashboard 摘要資料"""
+
+    month_summary: MonthSummary
+    recent_records: List[RecentRecord] = Field(default_factory=list)
+    daily_trend: List[DailyTrend] = Field(default_factory=list)
+    budget: BudgetStatus
+
+
+class DashboardSummaryResponse(BaseModel):
+    """Dashboard 摘要回應"""
+
+    success: bool = True
+    data: DashboardSummary
+
+
+class BudgetRequest(BaseModel):
+    """預算設定請求"""
+
+    monthly_budget: Optional[int] = Field(
+        default=None, description="月預算金額（null 表示取消預算）", ge=0
+    )
+
+
+class BudgetResponse(BaseModel):
+    """預算設定回應"""
+
+    success: bool = True
+    monthly_budget: Optional[int] = None
+    message: str = ""
 
 
 # =========================

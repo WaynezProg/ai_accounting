@@ -30,6 +30,8 @@ from app.database.crud import (
     create_oauth_login_code,
     get_oauth_login_code_by_hash,
     mark_oauth_login_code_used,
+    get_user_budget,
+    update_user_budget,
 )
 from app.services.oauth_service import oauth_service
 from app.services.jwt_service import jwt_service
@@ -783,3 +785,86 @@ def list_timezones():
         "success": True,
         "timezones": COMMON_TIMEZONES,
     }
+
+
+# =========================
+# 預算設定端點
+# =========================
+
+
+class BudgetRequest(BaseModel):
+    """預算設定請求"""
+
+    monthly_budget: Optional[int] = Field(
+        default=None,
+        description="月預算金額（null 表示取消預算）",
+        ge=0,
+    )
+
+
+class BudgetResponse(BaseModel):
+    """預算回應"""
+
+    success: bool = True
+    monthly_budget: Optional[int] = None
+    message: str = ""
+
+
+@router.get("/settings/budget", response_model=BudgetResponse)
+def get_budget(
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """
+    取得用戶的月預算設定
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="需要登入")
+
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="無效的用戶")
+
+    budget = get_user_budget(db, user_id)
+
+    return BudgetResponse(
+        success=True,
+        monthly_budget=budget,
+        message="取得成功",
+    )
+
+
+@router.put("/settings/budget", response_model=BudgetResponse)
+def set_budget(
+    request: BudgetRequest,
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """
+    設定用戶的月預算
+
+    傳入 monthly_budget = null 可取消預算設定
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="需要登入")
+
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="無效的用戶")
+
+    user = update_user_budget(db, user_id, request.monthly_budget)
+    if not user:
+        raise HTTPException(status_code=404, detail="用戶不存在")
+
+    if request.monthly_budget is None:
+        message = "已取消月預算設定"
+    else:
+        message = f"月預算已設定為 {request.monthly_budget:,} 元"
+
+    logger.info(f"Updated budget for user {user_id}: {request.monthly_budget}")
+
+    return BudgetResponse(
+        success=True,
+        monthly_budget=user.monthly_budget,
+        message=message,
+    )

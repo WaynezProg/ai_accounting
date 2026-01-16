@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.engine import Base
@@ -21,6 +21,9 @@ class User(Base):
     timezone: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True, default="Asia/Taipei"
     )  # IANA timezone name (e.g., "Asia/Taipei", "America/New_York")
+    monthly_budget: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, default=None
+    )  # 月預算金額（整數，單位：TWD）
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

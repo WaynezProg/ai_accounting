@@ -5,7 +5,7 @@
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 
 from google.oauth2.credentials import Credentials
@@ -606,6 +606,103 @@ class UserSheetsService:
         except Exception as e:
             logger.error(f"Get multi-month stats failed: {e}")
             raise GoogleSheetsError("STATS_ERROR", f"統計查詢失敗：{str(e)}")
+
+    async def get_recent_records(
+        self,
+        sheet_id: str,
+        limit: int = 5,
+    ) -> List[Dict]:
+        """
+        取得最近的記帳記錄
+
+        Args:
+            sheet_id: Google Sheet ID
+            limit: 最多回傳幾筆記錄
+
+        Returns:
+            List[Dict]: 最近的記帳記錄（按時間倒序）
+        """
+        try:
+            # 讀取當月和上月的記錄
+            current_month = datetime.now().strftime("%Y-%m")
+            from datetime import timedelta as td
+
+            last_month = (datetime.now().replace(day=1) - td(days=1)).strftime("%Y-%m")
+
+            all_records = []
+            for month in [current_month, last_month]:
+                try:
+                    records = await self.get_all_records(sheet_id, month=month)
+                    all_records.extend(records)
+                except Exception:
+                    continue
+
+            # 按時間倒序排列
+            all_records.sort(key=lambda x: x.get("時間", ""), reverse=True)
+
+            # 回傳前 N 筆
+            recent = all_records[:limit]
+            logger.info(f"Got {len(recent)} recent records")
+            return recent
+
+        except Exception as e:
+            logger.error(f"Get recent records failed: {e}")
+            raise GoogleSheetsError("READ_ERROR", f"查詢最近記錄失敗：{str(e)}")
+
+    async def get_daily_trend(
+        self,
+        sheet_id: str,
+        days: int = 7,
+    ) -> List[Dict]:
+        """
+        取得每日消費趨勢
+
+        Args:
+            sheet_id: Google Sheet ID
+            days: 回傳幾天的資料
+
+        Returns:
+            List[Dict]: 每日消費趨勢 [{"date": "2026-01-17", "total": 350}, ...]
+        """
+        try:
+            from datetime import timedelta as td
+
+            # 計算日期範圍
+            today = datetime.now()
+            start_date = (today - td(days=days - 1)).strftime("%Y-%m-%d")
+            end_date = today.strftime("%Y-%m-%d")
+
+            # 取得日期範圍內的記錄
+            records = await self.get_records_by_date_range(
+                sheet_id, start_date, end_date
+            )
+
+            # 按日期分組統計
+            daily_totals: Dict[str, float] = {}
+            for record in records:
+                time_str = record.get("時間", "")
+                record_date = time_str[:10] if len(time_str) >= 10 else ""
+                if record_date:
+                    try:
+                        amount = float(record.get("花費", 0))
+                        daily_totals[record_date] = (
+                            daily_totals.get(record_date, 0) + amount
+                        )
+                    except (ValueError, TypeError):
+                        continue
+
+            # 填補沒有記錄的日期
+            trend = []
+            for i in range(days):
+                date = (today - td(days=days - 1 - i)).strftime("%Y-%m-%d")
+                trend.append({"date": date, "total": daily_totals.get(date, 0)})
+
+            logger.info(f"Got daily trend for {days} days")
+            return trend
+
+        except Exception as e:
+            logger.error(f"Get daily trend failed: {e}")
+            raise GoogleSheetsError("STATS_ERROR", f"查詢每日趨勢失敗：{str(e)}")
 
 
 def create_user_sheets_service(

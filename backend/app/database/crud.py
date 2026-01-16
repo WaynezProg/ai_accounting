@@ -93,6 +93,29 @@ def update_user_timezone(db: Session, user_id: str, timezone: str) -> Optional[U
     return user
 
 
+def get_user_budget(db: Session, user_id: str) -> Optional[int]:
+    """取得用戶的月預算"""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+    return user.monthly_budget
+
+
+def update_user_budget(
+    db: Session, user_id: str, budget: Optional[int]
+) -> Optional[User]:
+    """更新用戶的月預算"""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+    user.monthly_budget = budget
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    logger.info(f"Updated budget for user {user_id}: {budget}")
+    return user
+
+
 def get_or_create_user(
     db: Session,
     user_id: str,
