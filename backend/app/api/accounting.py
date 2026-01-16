@@ -415,24 +415,34 @@ async def get_dashboard_summary(
     )
 
     # 2. 取得最近記帳記錄
-    recent_records_raw = await user_sheets_service.get_recent_records(sheet_id, limit=5)
-    recent_records = [
-        RecentRecord(
-            時間=r.get("時間", ""),
-            名稱=r.get("名稱", ""),
-            類別=r.get("類別", ""),
-            花費=float(r.get("花費", 0)),
+    recent_records = []
+    try:
+        recent_records_raw = await user_sheets_service.get_recent_records(
+            sheet_id, limit=5
         )
-        for r in recent_records_raw
-    ]
+        recent_records = [
+            RecentRecord(
+                時間=r.get("時間", ""),
+                名稱=r.get("名稱", ""),
+                類別=r.get("類別", ""),
+                花費=float(r.get("花費", 0)),
+            )
+            for r in recent_records_raw
+        ]
+    except Exception as e:
+        logger.warning(f"Failed to get recent records for dashboard: {e}")
 
     # 3. 取得每日消費趨勢（使用用戶時區）
-    daily_trend_raw = await user_sheets_service.get_daily_trend(
-        sheet_id, days=7, user_timezone=user_timezone
-    )
-    daily_trend = [
-        DailyTrend(date=d["date"], total=d["total"]) for d in daily_trend_raw
-    ]
+    daily_trend = []
+    try:
+        daily_trend_raw = await user_sheets_service.get_daily_trend(
+            sheet_id, days=7, user_timezone=user_timezone
+        )
+        daily_trend = [
+            DailyTrend(date=d["date"], total=d["total"]) for d in daily_trend_raw
+        ]
+    except Exception as e:
+        logger.warning(f"Failed to get daily trend for dashboard: {e}")
 
     # 4. 取得預算狀態
     monthly_limit = get_user_budget(db, user_id) if user_id else None
