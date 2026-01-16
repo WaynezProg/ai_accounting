@@ -128,7 +128,7 @@ export function BudgetProgressBar({
           variant="ghost"
           className="h-7 text-xs"
           onClick={() => {
-            setBudgetInput(budget.monthly_limit?.toString() ?? '');
+            setBudgetInput(budget.monthly_limit.toString());
             setIsEditing(true);
           }}
         >
@@ -141,7 +141,7 @@ export function BudgetProgressBar({
             已花費 ${budget.spent.toLocaleString()}
           </span>
           <span className="text-muted-foreground">
-            / ${budget.monthly_limit?.toLocaleString()}
+            / ${budget.monthly_limit.toLocaleString()}
           </span>
         </div>
         
