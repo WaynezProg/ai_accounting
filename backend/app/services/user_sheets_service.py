@@ -661,6 +661,7 @@ class UserSheetsService:
         self,
         sheet_id: str,
         days: int = 7,
+        user_timezone: str = "Asia/Taipei",
     ) -> List[Dict]:
         """
         取得每日消費趨勢
@@ -668,15 +669,25 @@ class UserSheetsService:
         Args:
             sheet_id: Google Sheet ID
             days: 回傳幾天的資料
+            user_timezone: 用戶時區（IANA 格式，如 "Asia/Taipei"）
 
         Returns:
             List[Dict]: 每日消費趨勢 [{"date": "2026-01-17", "total": 350}, ...]
         """
         try:
             from datetime import timedelta as td
+            from zoneinfo import ZoneInfo
 
-            # 計算日期範圍
-            today = datetime.now()
+            # 使用用戶時區計算日期範圍
+            try:
+                tz = ZoneInfo(user_timezone)
+            except Exception:
+                logger.warning(
+                    f"Invalid timezone: {user_timezone}, falling back to Asia/Taipei"
+                )
+                tz = ZoneInfo("Asia/Taipei")
+
+            today = datetime.now(tz)
             start_date = (today - td(days=days - 1)).strftime("%Y-%m-%d")
             end_date = today.strftime("%Y-%m-%d")
 

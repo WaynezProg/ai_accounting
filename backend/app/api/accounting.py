@@ -319,10 +319,16 @@ async def get_query_history_endpoint(
     )
 
     # 解析 cursor 時間戳
+    # 注意：資料庫儲存的是 naive UTC datetime，需要將 cursor 轉換為 naive datetime
     cursor_dt = None
     if cursor:
         try:
-            cursor_dt = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+            # 如果是 timezone-aware，轉換為 UTC 後移除 tzinfo
+            if parsed.tzinfo is not None:
+                cursor_dt = parsed.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            else:
+                cursor_dt = parsed
         except ValueError:
             raise HTTPException(status_code=400, detail="無效的 cursor 格式")
 
@@ -378,6 +384,13 @@ async def get_dashboard_summary(
     user_sheets_service, sheet_id = await get_sheets_service_for_user(current_user, db)
     user_id = current_user.get("user_id")
 
+    # 取得用戶時區設定
+    user_timezone = "Asia/Taipei"  # 預設值
+    if user_id:
+        user = get_user_by_id(db, user_id)
+        if user and user.timezone:
+            user_timezone = user.timezone
+
     # 1. 取得本月統計
     stats = await user_sheets_service.get_monthly_stats(sheet_id)
 
@@ -413,8 +426,10 @@ async def get_dashboard_summary(
         for r in recent_records_raw
     ]
 
-    # 3. 取得每日消費趨勢
-    daily_trend_raw = await user_sheets_service.get_daily_trend(sheet_id, days=7)
+    # 3. 取得每日消費趨勢（使用用戶時區）
+    daily_trend_raw = await user_sheets_service.get_daily_trend(
+        sheet_id, days=7, user_timezone=user_timezone
+    )
     daily_trend = [
         DailyTrend(date=d["date"], total=d["total"]) for d in daily_trend_raw
     ]
