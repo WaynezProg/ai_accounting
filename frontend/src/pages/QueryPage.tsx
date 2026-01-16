@@ -234,8 +234,16 @@ export default function QueryPage() {
       });
 
       if (cursor) {
-        // 載入更多
-        setHistory((prev) => [...prev, ...response.items]);
+        // 載入更多 - 去重避免臨時 ID 項目與真實資料庫記錄重複
+        setHistory((prev) => {
+          const existingQueries = new Set(
+            prev.map((item) => `${item.query}|${item.answer}`)
+          );
+          const newItems = response.items.filter(
+            (item) => !existingQueries.has(`${item.query}|${item.answer}`)
+          );
+          return [...prev, ...newItems];
+        });
       } else {
         // 初次載入或搜尋
         setHistory(response.items);

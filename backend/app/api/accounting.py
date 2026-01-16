@@ -423,11 +423,11 @@ async def get_dashboard_summary(
         top_categories=top_categories,
     )
 
-    # 2. 取得最近記帳記錄
+    # 2. 取得最近記帳記錄（使用用戶時區）
     recent_records = []
     try:
         recent_records_raw = await user_sheets_service.get_recent_records(
-            sheet_id, limit=5
+            sheet_id, limit=5, user_timezone=user_timezone
         )
         recent_records = [
             RecentRecord(

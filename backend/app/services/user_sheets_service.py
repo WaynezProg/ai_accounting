@@ -611,6 +611,7 @@ class UserSheetsService:
         self,
         sheet_id: str,
         limit: int = 5,
+        user_timezone: str = "Asia/Taipei",
     ) -> List[Dict]:
         """
         取得最近的記帳記錄
@@ -618,16 +619,27 @@ class UserSheetsService:
         Args:
             sheet_id: Google Sheet ID
             limit: 最多回傳幾筆記錄
+            user_timezone: 用戶時區（IANA 格式，如 "Asia/Taipei"）
 
         Returns:
             List[Dict]: 最近的記帳記錄（按時間倒序）
         """
         try:
-            # 讀取當月和上月的記錄
-            current_month = datetime.now().strftime("%Y-%m")
             from datetime import timedelta as td
+            from zoneinfo import ZoneInfo
 
-            last_month = (datetime.now().replace(day=1) - td(days=1)).strftime("%Y-%m")
+            # 使用用戶時區計算當前月份
+            try:
+                tz = ZoneInfo(user_timezone)
+            except Exception:
+                logger.warning(
+                    f"Invalid timezone: {user_timezone}, falling back to Asia/Taipei"
+                )
+                tz = ZoneInfo("Asia/Taipei")
+
+            now = datetime.now(tz)
+            current_month = now.strftime("%Y-%m")
+            last_month = (now.replace(day=1) - td(days=1)).strftime("%Y-%m")
 
             all_records = []
             for month in [current_month, last_month]:
