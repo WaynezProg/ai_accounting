@@ -256,10 +256,18 @@ async def query_accounting(
     # 3. 取得近三個月統計資料（用於趨勢分析，基於用戶時區）
     multi_month_stats = None
     try:
+        # 正確計算前幾個月（避免使用 timedelta(days=30) 導致月份邊界錯誤）
         months = []
+        current_year = now_in_user_tz.year
+        current_month = now_in_user_tz.month
         for i in range(3):
-            month_date = now_in_user_tz - timedelta(days=30 * i)
-            months.append(month_date.strftime("%Y-%m"))
+            # 計算往前 i 個月的年月
+            target_month = current_month - i
+            target_year = current_year
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            months.append(f"{target_year:04d}-{target_month:02d}")
         multi_month_stats = await user_sheets_service.get_multi_month_stats(
             sheet_id, months
         )
