@@ -411,12 +411,19 @@ async def get_dashboard_summary(
 
     # 4. 取得預算狀態
     monthly_limit = get_user_budget(db, user_id) if user_id else None
+    # Use "is not None" to distinguish between "not set" (None) and "set to 0"
+    has_budget = monthly_limit is not None
     budget = BudgetStatus(
         monthly_limit=monthly_limit,
         spent=stats.total,
-        remaining=(monthly_limit - stats.total) if monthly_limit else None,
+        remaining=(monthly_limit - stats.total) if has_budget else None,
         percentage=(
-            round(stats.total / monthly_limit * 100, 1) if monthly_limit else None
+            # Handle division by zero: if limit is 0 and spent > 0, it's infinitely over budget (cap at 100%)
+            round(stats.total / monthly_limit * 100, 1)
+            if has_budget and monthly_limit > 0
+            else (
+                100.0 if has_budget and stats.total > 0 else 0.0 if has_budget else None
+            )
         ),
     )
 

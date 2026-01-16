@@ -52,7 +52,8 @@ export function BudgetProgressBar({
   }
 
   // Show edit form if no budget set or editing
-  if (!budget?.monthly_limit || isEditing) {
+  // Use == null to distinguish between "not set" (null/undefined) and "set to 0"
+  if (budget?.monthly_limit == null || isEditing) {
     return (
       <Card>
         <CardHeader className="pb-2">
