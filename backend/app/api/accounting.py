@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -231,24 +232,33 @@ async def query_accounting(
     # 1. 取得當月統計資料
     stats = await user_sheets_service.get_monthly_stats(sheet_id)
 
-    # 2. 取得近期消費明細（最近 7 天）
+    # 取得用戶時區的當前時間（用於日期計算）
+    try:
+        tz = ZoneInfo(user_timezone)
+    except Exception:
+        logger.warning(
+            f"Invalid timezone: {user_timezone}, falling back to Asia/Taipei"
+        )
+        tz = ZoneInfo("Asia/Taipei")
+    now_in_user_tz = datetime.now(tz)
+
+    # 2. 取得近期消費明細（最近 7 天，基於用戶時區）
     recent_records = None
     try:
-        today = datetime.now().strftime("%Y-%m-%d")
-        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        today = now_in_user_tz.strftime("%Y-%m-%d")
+        week_ago = (now_in_user_tz - timedelta(days=7)).strftime("%Y-%m-%d")
         recent_records = await user_sheets_service.get_records_by_date_range(
             sheet_id, week_ago, today
         )
     except Exception as e:
         logger.warning(f"Failed to get recent records: {e}")
 
-    # 3. 取得近三個月統計資料（用於趨勢分析）
+    # 3. 取得近三個月統計資料（用於趨勢分析，基於用戶時區）
     multi_month_stats = None
     try:
-        current_month = datetime.now()
         months = []
         for i in range(3):
-            month_date = current_month - timedelta(days=30 * i)
+            month_date = now_in_user_tz - timedelta(days=30 * i)
             months.append(month_date.strftime("%Y-%m"))
         multi_month_stats = await user_sheets_service.get_multi_month_stats(
             sheet_id, months
