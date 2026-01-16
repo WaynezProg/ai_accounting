@@ -57,11 +57,16 @@ function LoadingIcon({ className }: { className?: string }) {
 }
 
 const EXAMPLE_QUERIES = [
+  // 帳務統計
   '這個月花了多少錢？',
-  '飲食類別佔比多少？',
-  '哪個類別花最多？',
-  '今天有記帳嗎？',
-  '本月日均支出多少？',
+  // 明細查詢
+  '最近買了什麼？',
+  // 趨勢分析
+  '跟上個月比如何？',
+  // 預算規劃
+  '幫我規劃預算',
+  // 財經知識
+  '什麼是 ETF？',
 ];
 
 type QueryHistory = {
@@ -218,15 +223,15 @@ export default function QueryPage() {
       {/* Query Input */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">帳務查詢</CardTitle>
+          <CardTitle className="text-lg">財務小助手</CardTitle>
           <CardDescription>
-            用自然語言詢問您的消費狀況
+            查詢帳務、詢問理財知識，或隨意聊聊
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Input
-              placeholder="例如：這個月花了多少錢？"
+              placeholder="問我任何問題..."
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleQuery()}
@@ -267,7 +272,7 @@ export default function QueryPage() {
 
           {/* Example Queries */}
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">試試這些問題：</div>
+            <div className="text-sm text-muted-foreground">試試問我：</div>
             <div className="flex flex-wrap gap-2">
               {EXAMPLE_QUERIES.map((example) => (
                 <Button

@@ -1,6 +1,7 @@
 """記帳 API 端點"""
 
 import logging
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Query, Depends, HTTPException
@@ -192,9 +193,9 @@ async def query_accounting(
     db: Session = Depends(get_db),
 ):
     """
-    帳務查詢端點
+    智慧查詢端點（財務小助手）
 
-    使用自然語言查詢帳務狀況
+    使用自然語言查詢帳務狀況、詢問理財知識，或進行日常對話
 
     需要在 Authorization header 提供 Bearer Token（JWT 或已綁定用戶的 API Token）
     """
@@ -214,11 +215,42 @@ async def query_accounting(
         if user and user.timezone:
             user_timezone = user.timezone
 
-    # 1. 取得統計資料
+    # 1. 取得當月統計資料
     stats = await user_sheets_service.get_monthly_stats(sheet_id)
 
-    # 2. 使用 LLM 回答問題（帶入用戶時區）
-    response = await openai_service.answer_query(request.query, stats, user_timezone)
+    # 2. 取得近期消費明細（最近 7 天）
+    recent_records = None
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        recent_records = await user_sheets_service.get_records_by_date_range(
+            sheet_id, week_ago, today
+        )
+    except Exception as e:
+        logger.warning(f"Failed to get recent records: {e}")
+
+    # 3. 取得近三個月統計資料（用於趨勢分析）
+    multi_month_stats = None
+    try:
+        current_month = datetime.now()
+        months = []
+        for i in range(3):
+            month_date = current_month - timedelta(days=30 * i)
+            months.append(month_date.strftime("%Y-%m"))
+        multi_month_stats = await user_sheets_service.get_multi_month_stats(
+            sheet_id, months
+        )
+    except Exception as e:
+        logger.warning(f"Failed to get multi-month stats: {e}")
+
+    # 4. 使用 LLM 回答問題（帶入完整上下文）
+    response = await openai_service.answer_query(
+        query=request.query,
+        stats=stats,
+        user_timezone=user_timezone,
+        recent_records=recent_records,
+        multi_month_stats=multi_month_stats,
+    )
 
     return QueryResponse(
         success=True,

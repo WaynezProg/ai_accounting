@@ -345,7 +345,9 @@ class UserSheetsService:
                 body=body,
             ).execute()
 
-            logger.info(f"Written record to sheet {sheet_id}/{worksheet_name}: {record.名稱}")
+            logger.info(
+                f"Written record to sheet {sheet_id}/{worksheet_name}: {record.名稱}"
+            )
             return True
 
         except HttpError as e:
@@ -489,6 +491,121 @@ class UserSheetsService:
             return True
         except HttpError:
             return False
+
+    async def get_records_by_date_range(
+        self,
+        sheet_id: str,
+        start_date: str,
+        end_date: str,
+    ) -> List[Dict]:
+        """
+        根據日期範圍取得記帳記錄
+
+        Args:
+            sheet_id: Google Sheet ID
+            start_date: 開始日期（格式：YYYY-MM-DD）
+            end_date: 結束日期（格式：YYYY-MM-DD）
+
+        Returns:
+            List[Dict]: 符合日期範圍的記錄列表
+        """
+        try:
+            # 從日期範圍推算需要讀取的月份
+            start_month = start_date[:7]  # YYYY-MM
+            end_month = end_date[:7]
+
+            # 讀取可能包含資料的所有月份
+            all_records = []
+            worksheets = await self._get_worksheets(sheet_id)
+
+            for worksheet in worksheets:
+                # 只讀取在日期範圍內的月份分頁
+                if worksheet < start_month or worksheet > end_month:
+                    continue
+
+                records = await self.get_all_records(sheet_id, month=worksheet)
+                all_records.extend(records)
+
+            # 篩選符合日期範圍的記錄
+            filtered_records = []
+            for record in all_records:
+                time_str = record.get("時間", "")
+                # 提取日期部分（YYYY-MM-DD）
+                record_date = time_str[:10] if len(time_str) >= 10 else ""
+                if start_date <= record_date <= end_date:
+                    filtered_records.append(record)
+
+            logger.info(
+                f"Found {len(filtered_records)} records between {start_date} and {end_date}"
+            )
+            return filtered_records
+
+        except Exception as e:
+            logger.error(f"Get records by date range failed: {e}")
+            raise GoogleSheetsError("READ_ERROR", f"查詢記錄失敗：{str(e)}")
+
+    async def get_records_by_category(
+        self,
+        sheet_id: str,
+        category: str,
+        month: Optional[str] = None,
+    ) -> List[Dict]:
+        """
+        根據類別取得記帳記錄
+
+        Args:
+            sheet_id: Google Sheet ID
+            category: 類別名稱
+            month: 月份（格式：YYYY-MM），如果未提供則查詢當月
+
+        Returns:
+            List[Dict]: 符合類別的記錄列表
+        """
+        try:
+            if month is None:
+                month = datetime.now().strftime("%Y-%m")
+
+            records = await self.get_all_records(sheet_id, month=month)
+
+            # 篩選符合類別的記錄
+            filtered_records = [r for r in records if r.get("類別", "") == category]
+
+            logger.info(
+                f"Found {len(filtered_records)} records for category '{category}' in {month}"
+            )
+            return filtered_records
+
+        except Exception as e:
+            logger.error(f"Get records by category failed: {e}")
+            raise GoogleSheetsError("READ_ERROR", f"查詢記錄失敗：{str(e)}")
+
+    async def get_multi_month_stats(
+        self,
+        sheet_id: str,
+        months: List[str],
+    ) -> List[MonthlyStats]:
+        """
+        取得多個月份的統計資料
+
+        Args:
+            sheet_id: Google Sheet ID
+            months: 月份列表（格式：YYYY-MM）
+
+        Returns:
+            List[MonthlyStats]: 各月份的統計資料
+        """
+        try:
+            stats_list = []
+            for month in months:
+                stats = await self.get_monthly_stats(sheet_id, month=month)
+                stats_list.append(stats)
+
+            logger.info(f"Got stats for {len(stats_list)} months")
+            return stats_list
+
+        except Exception as e:
+            logger.error(f"Get multi-month stats failed: {e}")
+            raise GoogleSheetsError("STATS_ERROR", f"統計查詢失敗：{str(e)}")
 
 
 def create_user_sheets_service(

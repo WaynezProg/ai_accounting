@@ -59,11 +59,14 @@ class OpenAIService:
                 return response.choices[0].message.content
 
             except RateLimitError as e:
-                logger.warning(f"Rate limit hit, attempt {attempt + 1}/{self.max_retries}")
+                logger.warning(
+                    f"Rate limit hit, attempt {attempt + 1}/{self.max_retries}"
+                )
                 last_error = e
                 if attempt < self.max_retries - 1:
                     import time
-                    time.sleep(2 ** attempt)  # 指數退避
+
+                    time.sleep(2**attempt)  # 指數退避
 
             except APIConnectionError as e:
                 logger.error(f"API connection error: {e}")
@@ -73,7 +76,9 @@ class OpenAIService:
                 logger.error(f"API error: {e}")
                 raise OpenAIServiceError("API_ERROR", f"OpenAI API 錯誤：{str(e)}")
 
-        raise OpenAIServiceError("RETRY_EXHAUSTED", f"重試次數已達上限：{str(last_error)}")
+        raise OpenAIServiceError(
+            "RETRY_EXHAUSTED", f"重試次數已達上限：{str(last_error)}"
+        )
 
     async def parse_accounting_text(self, text: str) -> AccountingRecord:
         """
@@ -204,15 +209,30 @@ class OpenAIService:
             raise OpenAIServiceError("TTS_ERROR", f"語音合成失敗：{str(e)}")
 
     async def answer_query(
-        self, query: str, stats: MonthlyStats, user_timezone: str = "Asia/Taipei"
+        self,
+        query: str,
+        stats: MonthlyStats,
+        user_timezone: str = "Asia/Taipei",
+        recent_records: Optional[list] = None,
+        multi_month_stats: Optional[list] = None,
     ) -> str:
         """
-        回答帳務查詢
+        回答用戶查詢（財務小助手）
+
+        支援多種查詢模式：
+        - 帳務統計查詢：根據統計資料回答消費相關問題
+        - 歷史明細查詢：根據明細記錄回答特定消費問題
+        - 趨勢分析：根據多月統計比較消費變化
+        - 財經知識問答：回答理財、投資、儲蓄等基礎知識
+        - 消費建議：根據消費模式提供個人化建議
+        - 日常閒聊：友善回應問候和一般對話
 
         Args:
             query: 用戶的問題
-            stats: 統計資料
+            stats: 當月統計資料
             user_timezone: 用戶時區（IANA 格式，如 "Asia/Taipei"）
+            recent_records: 近期消費明細記錄（可選）
+            multi_month_stats: 多月統計資料（可選，用於趨勢分析）
 
         Returns:
             str: 回答內容
@@ -220,37 +240,82 @@ class OpenAIService:
         try:
             tz = ZoneInfo(user_timezone)
         except Exception:
-            logger.warning(f"Invalid timezone: {user_timezone}, falling back to Asia/Taipei")
+            logger.warning(
+                f"Invalid timezone: {user_timezone}, falling back to Asia/Taipei"
+            )
             tz = ZoneInfo("Asia/Taipei")
 
         current_time = datetime.now(tz)
-        current_time_text = f"{current_time.strftime('%Y-%m-%d %H:%M %z')} ({user_timezone})"
+        current_time_text = (
+            f"{current_time.strftime('%Y-%m-%d %H:%M %z')} ({user_timezone})"
+        )
+
+        # 財務小助手 system prompt
+        system_prompt = """你是「財務小助手」，一個友善且專業的個人理財 AI 助理。
+
+你的能力包括：
+1. **帳務查詢**：根據用戶的消費統計資料和明細記錄回答問題
+2. **趨勢分析**：比較不同月份的消費變化，分析消費趨勢
+3. **消費建議**：根據用戶的消費模式，提供個人化的省錢建議
+4. **預算規劃**：根據過往消費模式，建議合理的月度預算分配
+5. **財經知識**：解答儲蓄、投資、信用卡、貸款、稅務、保險等基礎理財知識
+6. **日常閒聊**：友善回應問候、感謝等日常對話，並適時引導用戶使用記帳功能
+
+回覆原則：
+- 使用繁體中文，語氣友善自然
+- 帳務問題請根據提供的統計資料和明細回答，提供具體數字
+- 趨勢分析時，請計算變化幅度並給出簡要解讀
+- 消費建議請針對用戶的高消費類別給出具體可行的建議
+- 預算規劃時，請根據歷史消費數據建議各類別的預算金額，並說明如何追蹤
+- 財經知識問題請給出簡潔易懂的解釋
+- 涉及投資建議時，請加入免責聲明：「以上僅供參考，不構成投資建議，建議諮詢專業理財顧問」
+- 不要提供具體的股票、基金推薦或買賣時機建議
+- 閒聊時保持親切，可以適時提醒用戶記帳的重要性"""
+
+        # 組合用戶訊息，包含查詢和上下文資料
+        user_content = f"""用戶問題：{query}
+
+目前時間：{current_time_text}
+
+【當月統計資料】
+- 月份：{stats.month}
+- 總支出：{stats.total} 元
+- 記錄筆數：{stats.record_count} 筆
+- 各類別支出：{json.dumps(stats.by_category, ensure_ascii=False)}"""
+
+        # 加入近期消費明細（如果有）
+        if recent_records:
+            records_text = "\n".join(
+                [
+                    f"  - {r.get('時間', 'N/A')}: {r.get('名稱', 'N/A')} ({r.get('類別', 'N/A')}) {r.get('花費', 0)} 元"
+                    for r in recent_records[:20]  # 最多顯示 20 筆
+                ]
+            )
+            user_content += f"""
+
+【近期消費明細】（最近 {len(recent_records)} 筆）
+{records_text}"""
+
+        # 加入多月統計資料（如果有）
+        if multi_month_stats:
+            trend_text = "\n".join(
+                [
+                    f"  - {s.month}: 總支出 {s.total} 元，{s.record_count} 筆"
+                    for s in multi_month_stats
+                ]
+            )
+            user_content += f"""
+
+【歷史月份統計】
+{trend_text}"""
+
+        user_content += """
+
+請根據用戶問題的類型適當回答。"""
+
         messages = [
-            {
-                "role": "system",
-                "content": """
-                    你是一個友善的記帳助手。根據用戶的統計資料回答問題。
-                    回覆要求：
-                    - 使用自然語言
-                    - 提供具體數字
-                    - 可以給出簡短建議
-                    - 如果資料不足以回答日級別或是否有記帳的問題，請明確說明「資料不足」或「無法判斷」
-                """,
-            },
-            {
-                "role": "user",
-                "content": f"""
-                    用戶問題：{query}
-                    目前時間戳（使用者本地時區）：{current_time_text}
-                    資料範圍：僅有月統計資料，無逐日記帳明細
-                    統計資料：
-                    - 月份：{stats.month}
-                    - 總支出：{stats.total} 元
-                    - 記錄筆數：{stats.record_count} 筆
-                    - 各類別支出：{json.dumps(stats.by_category, ensure_ascii=False)}
-                    請回答用戶的問題。
-                """,
-            },
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
         ]
 
         try:
