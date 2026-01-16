@@ -327,23 +327,10 @@ async def get_query_history_endpoint(
         f"Getting query history for user {user_id}, search={search}, cursor={cursor}"
     )
 
-    # 解析 cursor 時間戳
-    # 注意：資料庫儲存的是 naive UTC datetime，需要將 cursor 轉換為 naive datetime
-    cursor_dt = None
-    if cursor:
-        try:
-            parsed = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
-            # 如果是 timezone-aware，轉換為 UTC 後移除 tzinfo
-            if parsed.tzinfo is not None:
-                cursor_dt = parsed.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-            else:
-                cursor_dt = parsed
-        except ValueError:
-            raise HTTPException(status_code=400, detail="無效的 cursor 格式")
-
     # 取得查詢記錄
+    # cursor 現在是字串格式 "timestamp|id"，直接傳給 crud 層處理
     records, next_cursor = get_query_history(
-        db, user_id, limit=limit, cursor=cursor_dt, search=search
+        db, user_id, limit=limit, cursor=cursor, search=search
     )
 
     # 取得總筆數
@@ -363,7 +350,7 @@ async def get_query_history_endpoint(
     return QueryHistoryResponse(
         success=True,
         items=items,
-        next_cursor=next_cursor.isoformat() if next_cursor else None,
+        next_cursor=next_cursor,  # 已經是字串格式
         total=total,
     )
 

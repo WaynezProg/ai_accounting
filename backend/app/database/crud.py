@@ -473,9 +473,9 @@ def get_query_history(
     db: Session,
     user_id: str,
     limit: int = 20,
-    cursor: Optional[datetime] = None,
+    cursor: Optional[str] = None,
     search: Optional[str] = None,
-) -> tuple[list[QueryHistory], Optional[datetime]]:
+) -> tuple[list[QueryHistory], Optional[str]]:
     """
     取得使用者的查詢記錄（支援分頁與搜尋）
 
@@ -483,12 +483,14 @@ def get_query_history(
         db: 資料庫 Session
         user_id: 使用者 ID
         limit: 每頁筆數
-        cursor: 分頁游標（created_at 時間戳）
+        cursor: 分頁游標，格式為 "timestamp|id" 或舊格式的純時間戳
         search: 搜尋關鍵字（搜尋 query 和 answer）
 
     Returns:
-        tuple[list[QueryHistory], Optional[datetime]]: 查詢記錄列表和下一頁游標
+        tuple[list[QueryHistory], Optional[str]]: 查詢記錄列表和下一頁游標
     """
+    from sqlalchemy import or_, and_, tuple_
+
     stmt = select(QueryHistory).where(QueryHistory.user_id == user_id)
 
     # 搜尋過濾
@@ -499,12 +501,43 @@ def get_query_history(
             | (QueryHistory.answer.ilike(search_pattern))
         )
 
-    # Cursor-based 分頁
+    # Cursor-based 分頁（使用 created_at + id 組合避免同秒記錄被跳過）
     if cursor:
-        stmt = stmt.where(QueryHistory.created_at < cursor)
+        # 解析 cursor：支援新格式 "timestamp|id" 和舊格式純時間戳
+        if "|" in str(cursor):
+            cursor_time_str, cursor_id_str = str(cursor).rsplit("|", 1)
+            cursor_time = datetime.fromisoformat(cursor_time_str)
+            cursor_id = int(cursor_id_str)
+            # 使用 (created_at, id) 組合比較，避免同秒記錄被跳過
+            stmt = stmt.where(
+                or_(
+                    QueryHistory.created_at < cursor_time,
+                    and_(
+                        QueryHistory.created_at == cursor_time,
+                        QueryHistory.id < cursor_id,
+                    ),
+                )
+            )
+        else:
+            # 舊格式：純時間戳（向後相容）
+            try:
+                cursor_time = datetime.fromisoformat(str(cursor).replace("Z", "+00:00"))
+                # 如果是 timezone-aware，轉換為 naive datetime
+                if cursor_time.tzinfo is not None:
+                    from zoneinfo import ZoneInfo
 
-    # 按時間倒序排列，取 limit + 1 筆來判斷是否有下一頁
-    stmt = stmt.order_by(QueryHistory.created_at.desc()).limit(limit + 1)
+                    cursor_time = cursor_time.astimezone(ZoneInfo("UTC")).replace(
+                        tzinfo=None
+                    )
+                stmt = stmt.where(QueryHistory.created_at < cursor_time)
+            except ValueError:
+                # 無法解析，忽略 cursor
+                pass
+
+    # 按時間倒序、ID 倒序排列，取 limit + 1 筆來判斷是否有下一頁
+    stmt = stmt.order_by(QueryHistory.created_at.desc(), QueryHistory.id.desc()).limit(
+        limit + 1
+    )
 
     result = db.execute(stmt)
     records = list(result.scalars().all())
@@ -512,7 +545,9 @@ def get_query_history(
     # 判斷是否有下一頁
     next_cursor = None
     if len(records) > limit:
-        next_cursor = records[limit].created_at  # 下一頁從第 limit+1 筆開始
+        # 下一頁游標使用 "timestamp|id" 格式
+        next_record = records[limit]
+        next_cursor = f"{next_record.created_at.isoformat()}|{next_record.id}"
         records = records[:limit]  # 只回傳 limit 筆
 
     return records, next_cursor
