@@ -46,11 +46,11 @@ class Settings:
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_ACCESS_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "15"))
     JWT_REFRESH_EXPIRE_HOURS: int = int(
-        os.getenv("JWT_REFRESH_EXPIRE_HOURS", "168")
-    )  # 7 days
+        os.getenv("JWT_REFRESH_EXPIRE_HOURS", "336")
+    )  # 14 days
     JWT_REFRESH_INACTIVITY_HOURS: int = int(
-        os.getenv("JWT_REFRESH_INACTIVITY_HOURS", "48")
-    )
+        os.getenv("JWT_REFRESH_INACTIVITY_HOURS", "336")
+    )  # 14 days
     JWT_EXPIRE_MINUTES: int = int(
         os.getenv("JWT_EXPIRE_MINUTES", "1440")
     )  # 24 hours (legacy)
