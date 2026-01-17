@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi import HTTPException
 
+from app.config import settings
 from app.database.engine import Base
 from app.database.crud import create_user, save_refresh_token, get_refresh_token_by_user
 from app.services.jwt_service import jwt_service
@@ -56,7 +57,11 @@ class RefreshSessionTests(unittest.TestCase):
     def test_inactivity_logout(self):
         refresh_token = self._issue_refresh_token()
         token_record = get_refresh_token_by_user(self.db, self.user.id)
-        token_record.last_used_at = datetime.utcnow() - timedelta(hours=49)
+        # 使用設定值 + 1 小時，確保超過 inactivity threshold
+        inactivity_hours = settings.JWT_REFRESH_INACTIVITY_HOURS + 1
+        token_record.last_used_at = datetime.utcnow() - timedelta(
+            hours=inactivity_hours
+        )
         self.db.commit()
 
         with self.assertRaises(HTTPException) as context:
